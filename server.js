@@ -10,7 +10,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public'))); // قراءة فولدر public بشكل صحيح أونلاين
 
 // --- 2. إعداد قاعدة البيانات (Database) ---
-const db = new sqlite3.Database('./project.db', (err) => {
+const db = new sqlite3.Database(':memory:', (err) => {
     if (err) console.error("خطأ في قاعدة البيانات:", err.message);
     else console.log("✅ متصل بقاعدة بيانات المشروع بنجاح");
 });
