@@ -1,2 +1,48 @@
-# Cyber-Guard-Messenger
-A secure messaging web application built with Node.js and SQLite. It uses RSA Encryption to ensure that messages are private and encrypted from end-to-end. Features a modern UI with Dark Mode and secure user authentication
+# نظام المراسلة الآمن (Secure Messenger Pro) 🔐
+**مشروع مادة أمن المعلومات (Security Two) - جامعة برج العرب التكنولوجية**
+
+## 👤 إعداد الطالب
+**مؤمن** - الفرقة الأولى
+
+---
+
+## 📝 وصف المشروع
+تطبيق ويب للمراسلة الفورية يركز على مبدأ "الأمان بالتصميم" (Security by Design). يتيح النظام للمستخدمين التواصل عبر قنوات مشفرة تماماً تضمن سرية البيانات وخصوصية الهوية.
+
+## 🛠 التقنيات والمبادئ الأمنية المستخدمة
+
+### 1. تشفير كلمات المرور (Hashing - SHA-256)
+* لا يتم تخزين كلمات المرور كنصوص صريحة.
+* يتم استخدام خوارزمية **SHA-256** لتحويل كلمة المرور إلى بصمة رقمية فريدة.
+* هذا يحمي المستخدمين حتى في حالة وصول المتسللين إلى قاعدة البيانات.
+
+### 2. التشفير غير المتماثل (Asymmetric Encryption - RSA)
+* يعتمد النظام على توليد زوج من المفاتيح لكل مستخدم: **مفتاح عام (Public Key)** و **مفتاح خاص (Private Key)**.
+* يتم تشفير الرسالة باستخدام المفتاح العام للمستلم، ولا يمكن فكها إلا باستخدام مفتاحه الخاص.
+* **ملاحظة أمنية:** المفتاح الخاص يُخزن محلياً في متصفح المستخدم (Local Storage) ولا يُرسل أبداً للسيرفر.
+
+### 3. تقنيات التطوير
+* **Backend:** Node.js & Express.
+* **Database:** SQLite (Relational Database).
+* **Frontend:** HTML5, Tailwind CSS (Modern UI), Forge.js (Cryptography Library).
+
+---
+
+## 🚀 كيفية التشغيل
+1.  تأكد من تثبيت **Node.js** على جهازك.
+2.  قم بتثبيت المكتبات اللازمة عبر التيرمنال:
+    ```bash
+    npm install express sqlite3
+    ```
+3.  شغل السيرفر:
+    ```bash
+    node server.js
+    ```
+4.  افتح المتصفح على الرابط: `http://localhost:3000`
+
+---
+
+## 📸 لقطات من النظام
+* واجهة تسجيل دخول وخروج بأسلوب **Glassmorphism**.
+* نظام إعادة تعيين كلمة المرور المشفر.
+* غرف دردشة حية مع فك تشفير فوري للرسائل المستلمة.
