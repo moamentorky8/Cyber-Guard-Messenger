@@ -69,7 +69,7 @@
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Active Nodes</h3>
                 
                 <input type="text" id="searchInput" onkeyup="loadUsers()" placeholder="Search Agent..." 
-                       class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber">
+                       class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition">
 
                 <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2"></div>
                 
@@ -78,7 +78,7 @@
 
             <div class="lg:col-span-8 glass rounded-[2rem] flex flex-col overflow-hidden relative">
                 <div id="chat-header" class="p-5 border-b border-white/10 flex items-center gap-3 bg-white/5">
-                    <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber">?</div>
+                    <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase">?</div>
                     <div>
                         <h3 id="current-chat-name" class="font-bold text-sm tracking-tight uppercase">Select an Agent</h3>
                         <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Secure Tunnel Offline</p>
@@ -97,13 +97,12 @@
                 </div>
             </div>
         </div>
-
     </main>
 
     <script>
         let isLogin = false, currentUser = null, myKeys = null, targetUser = null;
 
-        // توليد مفاتيح RSA عند تحميل الصفحة لضمان الخصوصية
+        // Initialize RSA
         const pki = forge.pki;
         const keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
@@ -130,21 +129,148 @@
             const endpoint = isLogin ? '/login' : '/register';
             const payload = isLogin ? { username: user, password: pass } : { username: user, password: pass, publicKey: myPubKeyPem };
 
-            const res = await fetch(endpoint, { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify(payload) 
-            });
+            try {
+                const res = await fetch(endpoint, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(payload) 
+                });
 
-            if (res.ok) {
-                currentUser = await res.json();
-                startChat();
-            } else {
-                const err = await res.json();
-                alert(err.error || "Access Denied.");
-            }
+                if (res.ok) {
+                    currentUser = await res.json();
+                    startChat();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || "Access Denied.");
+                }
+            } catch (e) { alert("Server Connection Failed."); }
         }
 
         async function handleReset() {
             const user = prompt("Enter Username to Reset:");
-            const newPass = prompt("Enter New
+            const newPass = prompt("Enter New Passcode:");
+            if(!user || !newPass) return;
+            try {
+                const res = await fetch('/reset-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: user, password: newPass })
+                });
+                if(res.ok) alert("Identity Credentials Updated.");
+                else alert("Error: User Not Found.");
+            } catch (e) { alert("Reset Failed."); }
+        }
+
+        function startChat() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('chat-section').classList.remove('hidden');
+            document.getElementById('user-badge').classList.remove('hidden');
+            document.getElementById('active-user').innerText = currentUser.username;
+            
+            loadUsers();
+            setInterval(syncSystem, 3000); // Sync every 3 seconds
+        }
+
+        async function loadUsers() {
+            const searchVal = document.getElementById('searchInput').value;
+            try {
+                const res = await fetch(`/users?search=${searchVal}`);
+                const data = await res.json();
+                
+                document.getElementById('user-list').innerHTML = data.map(u => {
+                    if(u.username === currentUser.username) return '';
+                    const isOnline = u.status === 'online';
+                    const statusColor = isOnline ? 'bg-green-500 online-pulse' : 'bg-slate-500';
+                    
+                    return `
+                    <div onclick="setTarget('${u.username}', \`${u.publicKey.replace(/\n/g, '@@')}\`)" 
+                         class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group">
+                        <div class="relative">
+                            <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs uppercase">${u.username[0]}</div>
+                            <div class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-50 dark:border-[#020617] ${statusColor}"></div>
+                        </div>
+                        <div class="flex-1">
+                            <p class="font-bold text-xs uppercase tracking-tight">${u.username}</p>
+                            <p class="text-[8px] font-bold uppercase ${isOnline ? 'text-green-500' : 'text-slate-500'}">${u.status}</p>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (e) { console.error("User Load Error"); }
+        }
+
+        function setTarget(name, pubKeyPem) {
+            targetUser = { username: name, publicKey: pubKeyPem.replace(/@@/g, '\n') };
+            document.getElementById('current-chat-name').innerText = name;
+            document.getElementById('target-avatar').innerText = name[0].toUpperCase();
+            document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
+            document.getElementById('chat-status').classList.remove('text-slate-500');
+            document.getElementById('chat-status').classList.add('text-cyber');
+            document.getElementById('msg-area').innerHTML = '';
+        }
+
+        async function sendMessage() {
+            if(!targetUser) return alert("System Warning: Select a Peer Node");
+            const input = document.getElementById('msg-input'), text = input.value;
+            if(!text) return;
+
+            try {
+                const pubKey = pki.publicKeyFromPem(targetUser.publicKey);
+                const encrypted = forge.util.encode64(pubKey.encrypt(text));
+
+                await fetch('/send', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ sender: currentUser.username, receiver: targetUser.username, message: encrypted }) 
+                });
+                
+                const area = document.getElementById('msg-area');
+                area.innerHTML += `
+                    <div class="flex justify-end animate-fade-in">
+                        <div class="bg-cyber text-white p-4 rounded-2xl rounded-tr-none max-w-[70%] shadow-lg shadow-cyber/20">
+                            <p class="text-sm font-medium">${text}</p>
+                            <p class="text-[7px] mt-1 opacity-70 uppercase font-black">Encrypted & Transmitted</p>
+                        </div>
+                    </div>`;
+                input.value = '';
+                area.scrollTop = area.scrollHeight;
+            } catch (e) { alert("Encryption Error."); }
+        }
+
+        async function syncSystem() {
+            if(!currentUser) return;
+
+            // Heartbeat
+            fetch('/heartbeat', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ username: currentUser.username }) 
+            });
+
+            // Fetch Messages
+            try {
+                const res = await fetch(`/messages/${currentUser.username}`);
+                const msgs = await res.json();
+                const area = document.getElementById('msg-area');
+
+                msgs.forEach(m => {
+                    try {
+                        const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
+                        area.innerHTML += `
+                            <div class="flex justify-start animate-fade-in">
+                                <div class="glass p-4 rounded-2xl rounded-tl-none max-w-[70%] shadow-sm">
+                                    <p class="text-[9px] text-cyber font-black uppercase mb-1">${m.sender}</p>
+                                    <p class="text-sm font-medium">${decrypted}</p>
+                                    <p class="text-[7px] mt-1 text-cyber uppercase font-black">Decrypted RSA Payload</p>
+                                </div>
+                            </div>`;
+                        area.scrollTop = area.scrollHeight;
+                    } catch (e) { console.log("Decrypt Error: Possible Key Mismatch"); }
+                });
+            } catch (e) { }
+
+            // Sync User Status if not searching
+            if(document.getElementById('searchInput').value === "") loadUsers();
+        }
+    </script>
+</body>
+</html>
