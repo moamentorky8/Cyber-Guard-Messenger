@@ -1,103 +1,107 @@
 const express = require('express');
-const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
+const crypto = require('crypto');
+const path = require('path'); // لإدارة مسارات الملفات
+
 const app = express();
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// --- 1. الإعدادات الأساسية (Middlewares) ---
+app.use(express.json()); 
+app.use(express.static(path.join(__dirname, 'public'))); // قراءة فولدر public بشكل صحيح أونلاين
 
-// التخزين في الذاكرة (Memory) عشان Vercel ما يقعش
-let users = []; 
-let messages = []; 
+// --- 2. إعداد قاعدة البيانات (Database) ---
+const db = new sqlite3.Database('./project.db', (err) => {
+    if (err) console.error("خطأ في قاعدة البيانات:", err.message);
+    else console.log("✅ متصل بقاعدة بيانات المشروع بنجاح");
+});
 
-// --- 1. العمليات الأساسية (القديمة) ---
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        publicKey TEXT
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        senderId INTEGER,
+        receiverId INTEGER,
+        ciphertext TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+});
 
-// تسجيل مستخدم جديد
+// --- 3. دوال الحماية (Security Utilities) ---
+function hashPassword(password) {
+    return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+// --- 4. المسارات (Routes / APIs) ---
+
+// الصفحة الرئيسية (عشان تفتح أول ما تدخل على اللينك)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// تسجيل حساب جديد
 app.post('/register', (req, res) => {
     const { username, password, publicKey } = req.body;
-    if (users.find(u => u.username === username)) {
-        return res.status(400).json({ error: "اسم المستخدم موجود بالفعل" });
-    }
-    users.push({ 
-        username, 
-        password, 
-        publicKey, 
-        lastSeen: Date.now() 
+    const hashed = hashPassword(password);
+    db.run("INSERT INTO users (username, password, publicKey) VALUES (?, ?, ?)", 
+        [username, hashed, publicKey], (err) => {
+        if (err) return res.status(400).json({ error: "اسم المستخدم موجود بالفعل" });
+        res.status(201).send("Registered");
     });
-    res.json({ message: "تم إنشاء الحساب بنجاح" });
 });
 
 // تسجيل الدخول
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-    const user = users.find(u => u.username === username && u.password === password);
-    if (!user) {
-        return res.status(401).json({ error: "اسم المستخدم أو كلمة المرور خطأ" });
-    }
-    user.lastSeen = Date.now(); // تحديث حالة النشاط فور الدخول
-    res.json(user);
+    const hashed = hashPassword(password);
+    db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, hashed], (err, row) => {
+        if (err || !row) return res.status(401).json({ error: "بيانات خاطئة" });
+        res.json({ id: row.id, username: row.username, publicKey: row.publicKey });
+    });
 });
 
 // إعادة تعيين كلمة المرور
 app.post('/reset-password', (req, res) => {
-    const { username, newPassword } = req.body;
-    const user = users.find(u => u.username === username);
-    if (!user) {
-        return res.status(404).json({ error: "المستخدم غير موجود" });
-    }
-    user.password = newPassword;
-    res.json({ message: "تم تحديث كلمة المرور بنجاح" });
+    const { username, password } = req.body;
+    const newHashed = hashPassword(password);
+    db.run("UPDATE users SET password = ? WHERE username = ?", [newHashed, username], function(err) {
+        if (err || this.changes === 0) return res.status(404).send("User not found");
+        res.send("Updated");
+    });
 });
 
-// --- 2. الإضافات الجديدة (البحث والحالة) ---
-
-// جلب المستخدمين مع ميزة البحث وحالة الأونلاين
+// جلب قائمة المستخدمين
 app.get('/users', (req, res) => {
-    const search = req.query.search || "";
-    // تصفية المستخدمين بناءً على كلمة البحث
-    const filtered = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()));
-    
-    const result = filtered.map(u => ({
-        username: u.username,
-        publicKey: u.publicKey,
-        // لو آخر ظهور كان أقل من 40 ثانية يبقى أونلاين
-        status: (Date.now() - (u.lastSeen || 0) < 40000) ? "online" : "offline"
-    }));
-    res.json(result);
+    db.all("SELECT id, username, publicKey FROM users", (err, rows) => {
+        if (err) return res.status(500).send(err);
+        res.json(rows);
+    });
 });
-
-// --- 3. نظام المراسلة المشفرة ---
 
 // إرسال رسالة مشفرة
 app.post('/send', (req, res) => {
-    const { sender, receiver, message } = req.body;
-    messages.push({ 
-        sender, 
-        receiver, 
-        message, // الرسالة بتوصل هنا مشفرة RSA جاهزة من الـ Frontend
-        timestamp: Date.now() 
-    });
-    res.json({ success: true });
+    const { senderId, receiverId, ciphertext } = req.body;
+    db.run("INSERT INTO messages (senderId, receiverId, ciphertext) VALUES (?, ?, ?)", 
+        [senderId, receiverId, ciphertext], () => res.send("Sent"));
 });
 
-// استلام الرسائل الخاصة بالمستخدم
-app.get('/messages/:username', (req, res) => {
-    const myMsgs = messages.filter(m => m.receiver === req.params.username);
-    // مسح الرسائل بعد قرائتها (اختياري لتقليل استهلاك الرامات)
-    // messages = messages.filter(m => m.receiver !== req.params.username);
-    res.json(myMsgs);
+// جلب الرسائل المستلمة
+app.get('/messages/:userId', (req, res) => {
+    db.all("SELECT * FROM messages WHERE receiverId = ? ORDER BY timestamp DESC", 
+        [req.params.userId], (err, rows) => res.json(rows));
 });
 
-// تحديث حالة الأونلاين (Heartbeat)
-app.post('/heartbeat', (req, res) => {
-    const user = users.find(u => u.username === req.body.username);
-    if (user) {
-        user.lastSeen = Date.now();
-        res.sendStatus(200);
-    } else {
-        res.sendStatus(404);
-    }
-});
+// --- 5. تشغيل السيرفر (إعدادات النشر الأونلاين) ---
+const PORT = process.env.PORT || 3000; // استخدام الـ Port الخاص بالسيرفر أو 3000 لوكال
 
-// تشغيل السيرفر
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 السيرفر شغال على بورت ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+    console.log("=========================================");
+    console.log(`🚀 السيرفر يعمل الآن بنجاح`);
+    console.log(`🔗 الرابط المحلي: http://localhost:${PORT}`);
+    console.log("بواسطة: مؤمن - جامعة برج العرب التكنولوجية");
+    console.log("=========================================");
+});
