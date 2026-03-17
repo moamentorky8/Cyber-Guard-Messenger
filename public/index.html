@@ -102,7 +102,6 @@
     <script>
         let isLogin = false, currentUser = null, myKeys = null, targetUser = null;
 
-        // Initialize RSA
         const pki = forge.pki;
         const keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
@@ -168,7 +167,7 @@
             document.getElementById('active-user').innerText = currentUser.username;
             
             loadUsers();
-            setInterval(syncSystem, 3000); // Sync every 3 seconds
+            setInterval(syncSystem, 3000);
         }
 
         async function loadUsers() {
@@ -198,8 +197,12 @@
             } catch (e) { console.error("User Load Error"); }
         }
 
+        // --- التعديل هنا لإنهاء مشكلة التشفير ---
         function setTarget(name, pubKeyPem) {
-            targetUser = { username: name, publicKey: pubKeyPem.replace(/@@/g, '\n') };
+            targetUser = { 
+                username: name, 
+                publicKey: pubKeyPem.replace(/@@/g, '\n').trim() 
+            };
             document.getElementById('current-chat-name').innerText = name;
             document.getElementById('target-avatar').innerText = name[0].toUpperCase();
             document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
@@ -233,20 +236,21 @@
                     </div>`;
                 input.value = '';
                 area.scrollTop = area.scrollHeight;
-            } catch (e) { alert("Encryption Error."); }
+            } catch (e) { 
+                console.error("Encryption detail:", e);
+                alert("Encryption Error: Failed to secure payload."); 
+            }
         }
 
         async function syncSystem() {
             if(!currentUser) return;
 
-            // Heartbeat
             fetch('/heartbeat', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({ username: currentUser.username }) 
             });
 
-            // Fetch Messages
             try {
                 const res = await fetch(`/messages/${currentUser.username}`);
                 const msgs = await res.json();
@@ -264,11 +268,10 @@
                                 </div>
                             </div>`;
                         area.scrollTop = area.scrollHeight;
-                    } catch (e) { console.log("Decrypt Error: Possible Key Mismatch"); }
+                    } catch (e) { console.log("Decrypt Error"); }
                 });
             } catch (e) { }
 
-            // Sync User Status if not searching
             if(document.getElementById('searchInput').value === "") loadUsers();
         }
     </script>
