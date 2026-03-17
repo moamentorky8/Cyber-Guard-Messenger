@@ -1,221 +1,194 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: { extend: { colors: { cyber: '#06b6d4' } } }
-        }
-    </script>
+    <title>Cyber Messenger | التراسل الآمن</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; transition: background 0.3s, color 0.3s; }
-        .mono { font-family: 'JetBrains Mono', monospace; }
-        .glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
-        .chat-area::-webkit-scrollbar { width: 4px; }
-        .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: white; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .container { background: #2d2d2d; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 400px; text-align: center; }
+        input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; outline: none; }
+        button { width: 95%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        .hidden { display: none; }
+        #usersContainer { max-height: 200px; overflow-y: auto; margin-top: 10px; text-align: right; }
+        .user-item { background: #3d3d3d; padding: 10px; margin-bottom: 5px; border-radius: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .status-online { color: #2ecc71; font-size: 12px; }
+        .status-offline { color: #95a5a6; font-size: 12px; }
+        .msg-box { background: #111; padding: 10px; height: 150px; overflow-y: auto; margin: 10px 0; border-radius: 5px; font-size: 14px; text-align: right; }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen">
+<body>
 
-    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg">
-        <div class="flex flex-col">
-            <h1 class="text-xl font-black tracking-tighter text-cyber uppercase">Cyber Messenger</h1>
-            <p class="text-[10px] font-bold opacity-60 tracking-widest uppercase">Prepared by: Moamen Abdelfattah</p>
+    <div class="container" id="authBox">
+        <h2 id="formTitle">تسجيل الدخول</h2>
+        <input type="text" id="username" placeholder="اسم المستخدم">
+        <input type="password" id="password" placeholder="كلمة المرور">
+        <button onclick="login()" id="loginBtn">دخول</button>
+        <button onclick="register()" style="background: #28a745;">إنشاء حساب جديد</button>
+        <p style="cursor:pointer; color:#aaa; font-size:12px;" onclick="toggleReset()">نسيت كلمة المرور؟</p>
+        
+        <div id="resetBox" class="hidden">
+            <input type="password" id="newPassword" placeholder="كلمة المرور الجديدة">
+            <button onclick="resetPassword()" style="background: #ffc107; color: black;">تحديث كلمة المرور</button>
+        </div>
+    </div>
+
+    <div class="container hidden" id="chatBox">
+        <h3>أهلاً، <span id="myUser"></span></h3>
+        
+        <input type="text" id="searchInput" placeholder="بحث عن صديق..." onkeyup="loadUsers()">
+        
+        <div id="usersContainer">
+            </div>
+
+        <hr>
+        <div id="chatWindow" class="hidden">
+            <h4 id="chattingWith">تحدث مع: ...</h4>
+            <div id="messages" class="msg-box"></div>
+            <input type="text" id="msgInput" placeholder="اكتب رسالة مشفرة...">
+            <button onclick="sendMessage()">إرسال بالـ RSA</button>
         </div>
         
-        <div class="flex items-center gap-4">
-            <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition">
-                <span id="theme-icon" class="text-xl">🌙</span>
-            </button>
-            <div id="user-badge" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
-                <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
-                <span id="active-user" class="text-xs font-bold mono"></span>
-            </div>
-        </div>
-    </nav>
-
-    <main class="max-w-6xl mx-auto p-4 md:p-8">
-        
-        <div id="auth-section" class="max-w-md mx-auto mt-12 glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber">
-            <div class="text-center mb-8">
-                <h2 id="auth-title" class="text-2xl font-black uppercase italic">Security Terminal</h2>
-                <p class="text-[10px] opacity-50 uppercase tracking-widest">RSA Encryption System</p>
-            </div>
-            
-            <div class="space-y-4">
-                <input type="text" id="username" placeholder="Agent Username" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
-                <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
-                
-                <button onclick="handleAuth()" id="btn-main" class="w-full bg-cyber hover:bg-cyan-500 text-white p-4 rounded-xl font-black shadow-lg shadow-cyber/20 transition-all active:scale-95 uppercase text-xs">Register & Start</button>
-                
-                <div class="flex flex-col gap-4 text-center mt-6">
-                    <button onclick="toggleAuth()" id="toggle-text" class="text-xs font-bold text-slate-500 hover:text-cyber transition uppercase">Switch to Login</button>
-                    <hr class="border-slate-200 dark:border-slate-800">
-                    <a href="/reset.html" class="text-[10px] font-bold text-red-500 hover:tracking-widest transition-all uppercase">Reset Identity Credentials</a>
-                </div>
-            </div>
-        </div>
-
-        <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
-            <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
-                <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Active Nodes</h3>
-                <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2"></div>
-                <button onclick="location.reload()" class="mt-4 w-full p-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-[10px] uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
-            </div>
-
-            <div class="lg:col-span-8 glass rounded-[2rem] flex flex-col overflow-hidden relative">
-                <div id="chat-header" class="p-5 border-b border-white/10 flex items-center gap-3 bg-white/5">
-                    <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber">?</div>
-                    <div>
-                        <h3 id="current-chat-name" class="font-bold text-sm tracking-tight uppercase">Select an Agent</h3>
-                        <p class="text-[9px] text-cyber uppercase font-bold tracking-tighter">Secure Tunnel Offline</p>
-                    </div>
-                </div>
-
-                <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-50/50 dark:bg-transparent"></div>
-
-                <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3 items-center">
-                    <input type="text" id="msg-input" placeholder="Type a secure message..." class="flex-1 bg-slate-100 dark:bg-slate-950 border-none rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-cyber">
-                    <button onclick="sendMessage()" class="bg-cyber hover:scale-110 p-4 rounded-2xl text-white shadow-xl transition-all active:scale-90">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-    </main>
+        <button onclick="location.reload()" style="background: #dc3545; margin-top: 20px;">تسجيل خروج</button>
+    </div>
 
     <script>
-        let isLogin = false, currentUser = null, myKeys = null, targetUser = null;
+        let loggedInUser = null;
+        let selectedUser = null;
+        let myKeys = null;
 
-        function toggleTheme() {
-            const html = document.documentElement;
-            const icon = document.getElementById('theme-icon');
-            if (html.classList.contains('dark')) {
-                html.classList.remove('dark');
-                icon.innerText = '☀️';
-            } else {
-                html.classList.add('dark');
-                icon.innerText = '🌙';
-            }
-        }
+        // توليد مفاتيح RSA عند فتح الصفحة
+        const rsa = forge.pki.rsa;
+        myKeys = rsa.generateKeyPair({bits: 1024});
+        const publicKeyPem = forge.pki.publicKeyToPem(myKeys.publicKey);
 
-        function toggleAuth() {
-            isLogin = !isLogin;
-            document.getElementById('auth-title').innerText = isLogin ? 'Agent Login' : 'Security Terminal';
-            document.getElementById('btn-main').innerText = isLogin ? 'Authorize Access' : 'Register & Start';
-            document.getElementById('toggle-text').innerText = isLogin ? 'New Identity? Register' : 'Switch to Login';
-        }
-
-        async function handleAuth() {
-            const user = document.getElementById('username').value, pass = document.getElementById('password').value;
-            if(!user || !pass) return alert("System Error: Credentials Missing");
-
-            if (isLogin) {
-                const res = await fetch('/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username: user, password: pass }) });
-                if (res.ok) {
-                    currentUser = await res.json();
-                    const stored = localStorage.getItem(`priv_${user}`);
-                    if(stored) myKeys = { privateKey: forge.pki.privateKeyFromPem(stored) };
-                    startChat();
-                } else alert("Access Denied.");
-            } else {
-                const pair = forge.pki.rsa.generateKeyPair(1024);
-                const pub = forge.pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_${user}`, forge.pki.privateKeyToPem(pair.privateKey));
-                const res = await fetch('/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ username: user, password: pass, publicKey: pub }) });
-                if (res.ok) alert("Identity Registered. RSA Keys Generated Locally.");
-            }
-        }
-
-        function startChat() {
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('chat-section').classList.remove('hidden');
-            document.getElementById('user-badge').classList.remove('hidden');
-            document.getElementById('active-user').innerText = currentUser.username;
-            loadUsers();
-            setInterval(loadMessages, 1000);
-            setInterval(loadUsers, 5000);
-        }
-
-        async function loadUsers() {
-            const res = await fetch('/users');
+        // 1. تسجيل الحساب
+        async function register() {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const res = await fetch('/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: user, password: pass, publicKey: publicKeyPem })
+            });
             const data = await res.json();
-            document.getElementById('user-list').innerHTML = data.filter(u => u.id !== currentUser.id).map(u => `
-                <div onclick="setTarget(${u.id}, '${u.username}', '${btoa(u.publicKey)}')" 
-                     class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group">
-                    <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs">${u.username[0].toUpperCase()}</div>
-                    <div class="flex-1">
-                        <p class="font-bold text-xs uppercase tracking-tight">${u.username}</p>
-                        <p class="text-[8px] text-cyber font-bold uppercase">Online</p>
+            alert(data.message || data.error);
+        }
+
+        // 2. تسجيل الدخول
+        async function login() {
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const res = await fetch('/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            if (res.ok) {
+                loggedInUser = await res.json();
+                document.getElementById('authBox').classList.add('hidden');
+                document.getElementById('chatBox').classList.remove('hidden');
+                document.getElementById('myUser').innerText = loggedInUser.username;
+                loadUsers();
+                startHeartbeat();
+            } else {
+                alert("بيانات خاطئة!");
+            }
+        }
+
+        // 3. إعادة تعيين كلمة المرور
+        async function resetPassword() {
+            const user = document.getElementById('username').value;
+            const newPass = document.getElementById('newPassword').value;
+            const res = await fetch('/reset-password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: user, newPassword: newPass })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+        }
+
+        // 4. تحميل المستخدمين والبحث وحالة الـ Online
+        async function loadUsers() {
+            const search = document.getElementById('searchInput').value;
+            const res = await fetch(`/users?search=${search}`);
+            const users = await res.json();
+            const container = document.getElementById('usersContainer');
+            container.innerHTML = "";
+
+            users.forEach(u => {
+                if (u.username === loggedInUser.username) return;
+                const statusClass = u.status === 'online' ? 'status-online' : 'status-offline';
+                container.innerHTML += `
+                    <div class="user-item" onclick="selectUser('${u.username}', '${u.publicKey.replace(/\n/g, '')}')">
+                        <strong>${u.username}</strong>
+                        <span class="${statusClass}">● ${u.status}</span>
                     </div>
-                </div>
-            `).join('');
+                `;
+            });
         }
 
-        function setTarget(id, name, pubB64) {
-            targetUser = { id, name, pubKey: atob(pubB64) };
-            document.getElementById('current-chat-name').innerText = name;
-            document.getElementById('target-avatar').innerText = name[0].toUpperCase();
-            document.getElementById('msg-area').innerHTML = '';
-            loadMessages();
+        // 5. اختيار شخص للمراسلة
+        function selectUser(name, key) {
+            selectedUser = { username: name, publicKey: key };
+            document.getElementById('chatWindow').classList.remove('hidden');
+            document.getElementById('chattingWith').innerText = "تحدث مع: " + name;
+            document.getElementById('messages').innerHTML = ""; // تنظيف الشات
         }
 
+        // 6. إرسال رسالة مشفرة RSA
         async function sendMessage() {
-            if(!targetUser) return alert("Select a peer.");
-            const input = document.getElementById('msg-input'), text = input.value;
-            if(!text) return;
+            const plainText = document.getElementById('msgInput').value;
+            if (!selectedUser || !plainText) return;
 
-            const pubKey = forge.pki.publicKeyFromPem(targetUser.pubKey);
-            const encrypted = pubKey.encrypt(text, 'RSA-OAEP');
-            const ciphertext = forge.util.encode64(encrypted);
+            // التشفير باستخدام المفتاح العام للمستلم
+            const pubKey = forge.pki.publicKeyFromPem(selectedUser.publicKey);
+            const encrypted = forge.util.encode64(pubKey.encrypt(plainText));
 
-            await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ senderId: currentUser.id, receiverId: targetUser.id, ciphertext }) });
+            await fetch('/send', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ sender: loggedInUser.username, receiver: selectedUser.username, message: encrypted })
+            });
             
-            const area = document.getElementById('msg-area');
-            area.innerHTML += `
-                <div class="flex justify-end animate-slide-up">
-                    <div class="bg-cyber text-white p-4 rounded-2xl rounded-tr-none max-w-[70%] shadow-lg shadow-cyber/20">
-                        <p class="text-sm font-medium">${text}</p>
-                        <p class="text-[7px] mt-1 opacity-70 uppercase font-black">Encrypted & Sent</p>
-                    </div>
-                </div>`;
-            input.value = '';
-            area.scrollTop = area.scrollHeight;
+            document.getElementById('messages').innerHTML += `<div>أنت: ${plainText} (تم التشفير قبل الإرسال)</div>`;
+            document.getElementById('msgInput').value = "";
         }
 
-        async function loadMessages() {
-            if(!currentUser || !targetUser) return;
-            const res = await fetch(`/messages/${currentUser.id}`);
+        // 7. استلام الرسايل وفك تشفيرها
+        async function checkMessages() {
+            if (!loggedInUser) return;
+            const res = await fetch(`/messages/${loggedInUser.username}`);
             const msgs = await res.json();
-            const area = document.getElementById('msg-area');
+            const box = document.getElementById('messages');
             
-            const inbox = msgs.filter(m => m.senderId === targetUser.id);
-            inbox.forEach(m => {
-                const msgId = `msg-${m.id}`;
-                if(!document.getElementById(msgId)) {
-                    try {
-                        const dec = myKeys.privateKey.decrypt(forge.util.decode64(m.ciphertext), 'RSA-OAEP');
-                        area.innerHTML += `
-                            <div id="${msgId}" class="flex justify-start animate-slide-up">
-                                <div class="glass p-4 rounded-2xl rounded-tl-none max-w-[70%] shadow-sm">
-                                    <p class="text-sm font-medium">${dec}</p>
-                                    <p class="text-[7px] mt-1 text-cyber uppercase font-black">Decrypted RSA Payload</p>
-                                </div>
-                            </div>`;
-                        area.scrollTop = area.scrollHeight;
-                    } catch (e) { console.log("RSA Decrypt Failed"); }
+            msgs.forEach(m => {
+                try {
+                    const decrypted = myKeys.privateKey.decrypt(forge.util.decode64(m.message));
+                    box.innerHTML += `<div style="color:#007bff">${m.sender}: ${decrypted}</div>`;
+                } catch (e) {
+                    console.log("رسالة مشفرة بمفتاح آخر");
                 }
             });
         }
+
+        // 8. القلب النابض (Heartbeat) للتحديث التلقائي
+        function startHeartbeat() {
+            setInterval(async () => {
+                await fetch('/heartbeat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: loggedInUser.username })
+                });
+                if (document.getElementById('searchInput').value === "") loadUsers();
+                checkMessages();
+            }, 5000);
+        }
+
+        function toggleReset() { document.getElementById('resetBox').classList.toggle('hidden'); }
     </script>
 </body>
 </html>
