@@ -3,55 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber Messenger | التراسل الآمن</title>
+    <title>Cyber Messenger | Blue Edition</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: white; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        .container { background: #2d2d2d; padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 400px; text-align: center; }
-        input { width: 90%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; outline: none; }
-        button { width: 95%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        button:hover { background: #0056b3; }
+        :root {
+            --bg-color: #f4f4f4;
+            --container-bg: #ffffff;
+            --text-color: #333;
+            --primary-blue: #007bff;
+            --secondary-blue: #0056b3;
+            --input-border: #ccc;
+        }
+
+        /* الثيم الدارك (بناءً على طلبك) */
+        .dark-mode {
+            --bg-color: #121212;
+            --container-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --input-border: #444;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: 0.3s;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background: var(--container-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            width: 400px;
+            text-align: center;
+        }
+
+        input {
+            width: 90%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid var(--input-border);
+            background: transparent;
+            color: var(--text-color);
+        }
+
+        button {
+            width: 95%;
+            padding: 10px;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover { background: var(--secondary-blue); }
+
+        .mode-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            cursor: pointer;
+            font-size: 24px;
+        }
+
+        #usersContainer {
+            max-height: 150px;
+            overflow-y: auto;
+            margin: 15px 0;
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+        }
+
+        .user-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--input-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-item:hover { background: rgba(0,123,255,0.1); }
+        .online { color: #2ecc71; font-size: 12px; }
+        .offline { color: #95a5a6; font-size: 12px; }
         .hidden { display: none; }
-        #usersContainer { max-height: 200px; overflow-y: auto; margin-top: 10px; text-align: right; }
-        .user-item { background: #3d3d3d; padding: 10px; margin-bottom: 5px; border-radius: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .status-online { color: #2ecc71; font-size: 12px; }
-        .status-offline { color: #95a5a6; font-size: 12px; }
-        .msg-box { background: #111; padding: 10px; height: 150px; overflow-y: auto; margin: 10px 0; border-radius: 5px; font-size: 14px; text-align: right; }
+        .chat-window { height: 120px; overflow-y: auto; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; text-align: right; }
     </style>
 </head>
-<body>
+<body class="dark-mode"> <div class="mode-toggle" onclick="toggleMode()">🌓</div>
 
     <div class="container" id="authBox">
-        <h2 id="formTitle">تسجيل الدخول</h2>
+        <h2 style="color: var(--primary-blue);">Cyber Messenger</h2>
         <input type="text" id="username" placeholder="اسم المستخدم">
         <input type="password" id="password" placeholder="كلمة المرور">
-        <button onclick="login()" id="loginBtn">دخول</button>
-        <button onclick="register()" style="background: #28a745;">إنشاء حساب جديد</button>
-        <p style="cursor:pointer; color:#aaa; font-size:12px;" onclick="toggleReset()">نسيت كلمة المرور؟</p>
+        <button onclick="login()">دخول</button>
+        <button onclick="register()" style="margin-top: 5px; opacity: 0.8;">إنشاء حساب</button>
+        <p onclick="toggleReset()" style="font-size: 12px; cursor: pointer; margin-top: 10px;">نسيت كلمة المرور؟</p>
         
         <div id="resetBox" class="hidden">
             <input type="password" id="newPassword" placeholder="كلمة المرور الجديدة">
-            <button onclick="resetPassword()" style="background: #ffc107; color: black;">تحديث كلمة المرور</button>
+            <button onclick="resetPassword()">تحديث</button>
         </div>
     </div>
 
     <div class="container hidden" id="chatBox">
-        <h3>أهلاً، <span id="myUser"></span></h3>
+        <h3 style="color: var(--primary-blue);">أهلاً، <span id="displayUser"></span></h3>
         
-        <input type="text" id="searchInput" placeholder="بحث عن صديق..." onkeyup="loadUsers()">
+        <input type="text" id="searchInput" placeholder="ابحث عن صديق..." onkeyup="loadUsers()">
         
-        <div id="usersContainer">
-            </div>
+        <div id="usersContainer"></div>
 
-        <hr>
-        <div id="chatWindow" class="hidden">
-            <h4 id="chattingWith">تحدث مع: ...</h4>
-            <div id="messages" class="msg-box"></div>
+        <div id="chatArea" class="hidden">
+            <h4 id="chattingWith" style="font-size: 14px;">مراسلة: ...</h4>
+            <div id="messages" class="chat-window"></div>
             <input type="text" id="msgInput" placeholder="اكتب رسالة مشفرة...">
-            <button onclick="sendMessage()">إرسال بالـ RSA</button>
+            <button onclick="sendMessage()">إرسال RSA</button>
         </div>
-        
-        <button onclick="location.reload()" style="background: #dc3545; margin-top: 20px;">تسجيل خروج</button>
+
+        <button onclick="location.reload()" style="background: #dc3545; margin-top: 15px;">خروج</button>
     </div>
 
     <script>
@@ -59,132 +137,118 @@
         let selectedUser = null;
         let myKeys = null;
 
-        // توليد مفاتيح RSA عند فتح الصفحة
+        // توليد مفاتيح RSA
         const rsa = forge.pki.rsa;
         myKeys = rsa.generateKeyPair({bits: 1024});
-        const publicKeyPem = forge.pki.publicKeyToPem(myKeys.publicKey);
+        const myPubKeyPem = forge.pki.publicKeyToPem(myKeys.publicKey);
 
-        // 1. تسجيل الحساب
+        function toggleMode() {
+            document.body.classList.toggle('dark-mode');
+        }
+
         async function register() {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
             const res = await fetch('/register', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: user, password: pass, publicKey: publicKeyPem })
+                body: JSON.stringify({ username: u, password: p, publicKey: myPubKeyPem })
             });
             const data = await res.json();
             alert(data.message || data.error);
         }
 
-        // 2. تسجيل الدخول
         async function login() {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
             const res = await fetch('/login', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: user, password: pass })
+                body: JSON.stringify({ username: u, password: p })
             });
             if (res.ok) {
                 loggedInUser = await res.json();
                 document.getElementById('authBox').classList.add('hidden');
                 document.getElementById('chatBox').classList.remove('hidden');
-                document.getElementById('myUser').innerText = loggedInUser.username;
+                document.getElementById('displayUser').innerText = loggedInUser.username;
                 loadUsers();
-                startHeartbeat();
-            } else {
-                alert("بيانات خاطئة!");
-            }
+                startSync();
+            } else { alert("خطأ في البيانات!"); }
         }
 
-        // 3. إعادة تعيين كلمة المرور
         async function resetPassword() {
-            const user = document.getElementById('username').value;
-            const newPass = document.getElementById('newPassword').value;
-            const res = await fetch('/reset-password', {
+            const u = document.getElementById('username').value;
+            const np = document.getElementById('newPassword').value;
+            await fetch('/reset-password', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: user, newPassword: newPass })
+                body: JSON.stringify({ username: u, newPassword: np })
             });
-            const data = await res.json();
-            alert(data.message || data.error);
+            alert("تم التحديث");
         }
 
-        // 4. تحميل المستخدمين والبحث وحالة الـ Online
         async function loadUsers() {
-            const search = document.getElementById('searchInput').value;
-            const res = await fetch(`/users?search=${search}`);
+            const s = document.getElementById('searchInput').value;
+            const res = await fetch(`/users?search=${s}`);
             const users = await res.json();
             const container = document.getElementById('usersContainer');
             container.innerHTML = "";
 
             users.forEach(u => {
                 if (u.username === loggedInUser.username) return;
-                const statusClass = u.status === 'online' ? 'status-online' : 'status-offline';
+                const statusStr = u.status === 'online' ? '● أونلاين' : '● أوفلاين';
+                const statusClass = u.status === 'online' ? 'online' : 'offline';
                 container.innerHTML += `
-                    <div class="user-item" onclick="selectUser('${u.username}', '${u.publicKey.replace(/\n/g, '')}')">
+                    <div class="user-item" onclick="selectUser('${u.username}', '${u.publicKey.replace(/\n/g, '@@')}')">
                         <strong>${u.username}</strong>
-                        <span class="${statusClass}">● ${u.status}</span>
-                    </div>
-                `;
+                        <span class="${statusClass}">${statusStr}</span>
+                    </div>`;
             });
         }
 
-        // 5. اختيار شخص للمراسلة
         function selectUser(name, key) {
-            selectedUser = { username: name, publicKey: key };
-            document.getElementById('chatWindow').classList.remove('hidden');
-            document.getElementById('chattingWith').innerText = "تحدث مع: " + name;
-            document.getElementById('messages').innerHTML = ""; // تنظيف الشات
+            selectedUser = { username: name, publicKey: key.replace(/@@/g, '\n') };
+            document.getElementById('chatArea').classList.remove('hidden');
+            document.getElementById('chattingWith').innerText = "مراسلة: " + name;
+            document.getElementById('messages').innerHTML = "";
         }
 
-        // 6. إرسال رسالة مشفرة RSA
         async function sendMessage() {
-            const plainText = document.getElementById('msgInput').value;
-            if (!selectedUser || !plainText) return;
+            const text = document.getElementById('msgInput').value;
+            if (!selectedUser || !text) return;
 
-            // التشفير باستخدام المفتاح العام للمستلم
             const pubKey = forge.pki.publicKeyFromPem(selectedUser.publicKey);
-            const encrypted = forge.util.encode64(pubKey.encrypt(plainText));
+            const encrypted = forge.util.encode64(pubKey.encrypt(text));
 
             await fetch('/send', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ sender: loggedInUser.username, receiver: selectedUser.username, message: encrypted })
             });
-            
-            document.getElementById('messages').innerHTML += `<div>أنت: ${plainText} (تم التشفير قبل الإرسال)</div>`;
+            document.getElementById('messages').innerHTML += `<div>أنت: ${text}</div>`;
             document.getElementById('msgInput').value = "";
         }
 
-        // 7. استلام الرسايل وفك تشفيرها
-        async function checkMessages() {
-            if (!loggedInUser) return;
+        async function checkMsgs() {
             const res = await fetch(`/messages/${loggedInUser.username}`);
             const msgs = await res.json();
-            const box = document.getElementById('messages');
-            
             msgs.forEach(m => {
                 try {
                     const decrypted = myKeys.privateKey.decrypt(forge.util.decode64(m.message));
-                    box.innerHTML += `<div style="color:#007bff">${m.sender}: ${decrypted}</div>`;
-                } catch (e) {
-                    console.log("رسالة مشفرة بمفتاح آخر");
-                }
+                    document.getElementById('messages').innerHTML += `<div style="color:var(--primary-blue)">${m.sender}: ${decrypted}</div>`;
+                } catch(e) { console.log("Error decrypting"); }
             });
         }
 
-        // 8. القلب النابض (Heartbeat) للتحديث التلقائي
-        function startHeartbeat() {
-            setInterval(async () => {
-                await fetch('/heartbeat', {
+        function startSync() {
+            setInterval(() => {
+                fetch('/heartbeat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ username: loggedInUser.username })
                 });
                 if (document.getElementById('searchInput').value === "") loadUsers();
-                checkMessages();
+                checkMsgs();
             }, 5000);
         }
 
