@@ -1,258 +1,150 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber Messenger | Blue Edition</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
+    <title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { cyber: '#06b6d4' } } }
+        }
+    </script>
     <style>
-        :root {
-            --bg-color: #f4f4f4;
-            --container-bg: #ffffff;
-            --text-color: #333;
-            --primary-blue: #007bff;
-            --secondary-blue: #0056b3;
-            --input-border: #ccc;
-        }
-
-        /* الثيم الدارك (بناءً على طلبك) */
-        .dark-mode {
-            --bg-color: #121212;
-            --container-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --input-border: #444;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            transition: 0.3s;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        .container {
-            background: var(--container-bg);
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            width: 400px;
-            text-align: center;
-        }
-
-        input {
-            width: 90%;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 6px;
-            border: 1px solid var(--input-border);
-            background: transparent;
-            color: var(--text-color);
-        }
-
-        button {
-            width: 95%;
-            padding: 10px;
-            background: var(--primary-blue);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        button:hover { background: var(--secondary-blue); }
-
-        .mode-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            cursor: pointer;
-            font-size: 24px;
-        }
-
-        #usersContainer {
-            max-height: 150px;
-            overflow-y: auto;
-            margin: 15px 0;
-            border: 1px solid var(--input-border);
-            border-radius: 6px;
-        }
-
-        .user-item {
-            padding: 10px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--input-border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .user-item:hover { background: rgba(0,123,255,0.1); }
-        .online { color: #2ecc71; font-size: 12px; }
-        .offline { color: #95a5a6; font-size: 12px; }
-        .hidden { display: none; }
-        .chat-window { height: 120px; overflow-y: auto; background: rgba(0,0,0,0.05); padding: 5px; margin-bottom: 5px; text-align: right; }
+        body { font-family: 'Inter', sans-serif; transition: background 0.3s, color 0.3s; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
+        .chat-area::-webkit-scrollbar { width: 4px; }
+        .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
+        @keyframes pulse-green { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+        .online-pulse { animation: pulse-green 2s infinite; }
     </style>
 </head>
-<body class="dark-mode"> <div class="mode-toggle" onclick="toggleMode()">🌓</div>
+<body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen">
 
-    <div class="container" id="authBox">
-        <h2 style="color: var(--primary-blue);">Cyber Messenger</h2>
-        <input type="text" id="username" placeholder="اسم المستخدم">
-        <input type="password" id="password" placeholder="كلمة المرور">
-        <button onclick="login()">دخول</button>
-        <button onclick="register()" style="margin-top: 5px; opacity: 0.8;">إنشاء حساب</button>
-        <p onclick="toggleReset()" style="font-size: 12px; cursor: pointer; margin-top: 10px;">نسيت كلمة المرور؟</p>
-        
-        <div id="resetBox" class="hidden">
-            <input type="password" id="newPassword" placeholder="كلمة المرور الجديدة">
-            <button onclick="resetPassword()">تحديث</button>
+    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg">
+        <div class="flex flex-col">
+            <h1 class="text-xl font-black tracking-tighter text-cyber uppercase">Cyber Messenger</h1>
+            <p class="text-[10px] font-bold opacity-60 tracking-widest uppercase">Prepared by: Moamen Abdelfattah</p>
         </div>
-    </div>
-
-    <div class="container hidden" id="chatBox">
-        <h3 style="color: var(--primary-blue);">أهلاً، <span id="displayUser"></span></h3>
         
-        <input type="text" id="searchInput" placeholder="ابحث عن صديق..." onkeyup="loadUsers()">
-        
-        <div id="usersContainer"></div>
+        <div class="flex items-center gap-4">
+            <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                <span id="theme-icon" class="text-xl">🌙</span>
+            </button>
+            <div id="user-badge" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
+                <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
+                <span id="active-user" class="text-xs font-bold mono"></span>
+            </div>
+        </div>
+    </nav>
 
-        <div id="chatArea" class="hidden">
-            <h4 id="chattingWith" style="font-size: 14px;">مراسلة: ...</h4>
-            <div id="messages" class="chat-window"></div>
-            <input type="text" id="msgInput" placeholder="اكتب رسالة مشفرة...">
-            <button onclick="sendMessage()">إرسال RSA</button>
+    <main class="max-w-6xl mx-auto p-4 md:p-8">
+        
+        <div id="auth-section" class="max-w-md mx-auto mt-12 glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber">
+            <div class="text-center mb-8">
+                <h2 id="auth-title" class="text-2xl font-black uppercase italic">Security Terminal</h2>
+                <p class="text-[10px] opacity-50 uppercase tracking-widest">RSA Encryption System</p>
+            </div>
+            
+            <div class="space-y-4">
+                <input type="text" id="username" placeholder="Agent Username" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
+                <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
+                
+                <button onclick="handleAuth()" id="btn-main" class="w-full bg-cyber hover:bg-cyan-500 text-white p-4 rounded-xl font-black shadow-lg shadow-cyber/20 transition-all active:scale-95 uppercase text-xs">Register & Start</button>
+                
+                <div class="flex flex-col gap-4 text-center mt-6">
+                    <button onclick="toggleAuth()" id="toggle-text" class="text-xs font-bold text-slate-500 hover:text-cyber transition uppercase">Switch to Login</button>
+                    <hr class="border-slate-200 dark:border-slate-800">
+                    <button onclick="handleReset()" class="text-[10px] font-bold text-red-500 hover:tracking-widest transition-all uppercase">Reset Identity Credentials</button>
+                </div>
+            </div>
         </div>
 
-        <button onclick="location.reload()" style="background: #dc3545; margin-top: 15px;">خروج</button>
-    </div>
+        <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
+            <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
+                <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Active Nodes</h3>
+                
+                <input type="text" id="searchInput" onkeyup="loadUsers()" placeholder="Search Agent..." 
+                       class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber">
+
+                <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2"></div>
+                
+                <button onclick="location.reload()" class="mt-4 w-full p-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-[10px] uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
+            </div>
+
+            <div class="lg:col-span-8 glass rounded-[2rem] flex flex-col overflow-hidden relative">
+                <div id="chat-header" class="p-5 border-b border-white/10 flex items-center gap-3 bg-white/5">
+                    <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber">?</div>
+                    <div>
+                        <h3 id="current-chat-name" class="font-bold text-sm tracking-tight uppercase">Select an Agent</h3>
+                        <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Secure Tunnel Offline</p>
+                    </div>
+                </div>
+
+                <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-50/50 dark:bg-transparent"></div>
+
+                <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3 items-center">
+                    <input type="text" id="msg-input" placeholder="Type a secure message..." class="flex-1 bg-slate-100 dark:bg-slate-950 border-none rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-cyber">
+                    <button onclick="sendMessage()" class="bg-cyber hover:scale-110 p-4 rounded-2xl text-white shadow-xl transition-all active:scale-90">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
 
     <script>
-        let loggedInUser = null;
-        let selectedUser = null;
-        let myKeys = null;
+        let isLogin = false, currentUser = null, myKeys = null, targetUser = null;
 
-        // توليد مفاتيح RSA
-        const rsa = forge.pki.rsa;
-        myKeys = rsa.generateKeyPair({bits: 1024});
-        const myPubKeyPem = forge.pki.publicKeyToPem(myKeys.publicKey);
+        // توليد مفاتيح RSA عند تحميل الصفحة لضمان الخصوصية
+        const pki = forge.pki;
+        const keypair = pki.rsa.generateKeyPair(1024);
+        const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
+        const myPrivKey = keypair.privateKey;
 
-        function toggleMode() {
-            document.body.classList.toggle('dark-mode');
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            html.classList.toggle('dark');
+            icon.innerText = html.classList.contains('dark') ? '🌙' : '☀️';
         }
 
-        async function register() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            const res = await fetch('/register', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: u, password: p, publicKey: myPubKeyPem })
-            });
-            const data = await res.json();
-            alert(data.message || data.error);
+        function toggleAuth() {
+            isLogin = !isLogin;
+            document.getElementById('auth-title').innerText = isLogin ? 'Agent Login' : 'Security Terminal';
+            document.getElementById('btn-main').innerText = isLogin ? 'Authorize Access' : 'Register & Start';
+            document.getElementById('toggle-text').innerText = isLogin ? 'New Identity? Register' : 'Switch to Login';
         }
 
-        async function login() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            const res = await fetch('/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: u, password: p })
+        async function handleAuth() {
+            const user = document.getElementById('username').value, pass = document.getElementById('password').value;
+            if(!user || !pass) return alert("System Error: Credentials Missing");
+
+            const endpoint = isLogin ? '/login' : '/register';
+            const payload = isLogin ? { username: user, password: pass } : { username: user, password: pass, publicKey: myPubKeyPem };
+
+            const res = await fetch(endpoint, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(payload) 
             });
+
             if (res.ok) {
-                loggedInUser = await res.json();
-                document.getElementById('authBox').classList.add('hidden');
-                document.getElementById('chatBox').classList.remove('hidden');
-                document.getElementById('displayUser').innerText = loggedInUser.username;
-                loadUsers();
-                startSync();
-            } else { alert("خطأ في البيانات!"); }
+                currentUser = await res.json();
+                startChat();
+            } else {
+                const err = await res.json();
+                alert(err.error || "Access Denied.");
+            }
         }
 
-        async function resetPassword() {
-            const u = document.getElementById('username').value;
-            const np = document.getElementById('newPassword').value;
-            await fetch('/reset-password', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ username: u, newPassword: np })
-            });
-            alert("تم التحديث");
-        }
-
-        async function loadUsers() {
-            const s = document.getElementById('searchInput').value;
-            const res = await fetch(`/users?search=${s}`);
-            const users = await res.json();
-            const container = document.getElementById('usersContainer');
-            container.innerHTML = "";
-
-            users.forEach(u => {
-                if (u.username === loggedInUser.username) return;
-                const statusStr = u.status === 'online' ? '● أونلاين' : '● أوفلاين';
-                const statusClass = u.status === 'online' ? 'online' : 'offline';
-                container.innerHTML += `
-                    <div class="user-item" onclick="selectUser('${u.username}', '${u.publicKey.replace(/\n/g, '@@')}')">
-                        <strong>${u.username}</strong>
-                        <span class="${statusClass}">${statusStr}</span>
-                    </div>`;
-            });
-        }
-
-        function selectUser(name, key) {
-            selectedUser = { username: name, publicKey: key.replace(/@@/g, '\n') };
-            document.getElementById('chatArea').classList.remove('hidden');
-            document.getElementById('chattingWith').innerText = "مراسلة: " + name;
-            document.getElementById('messages').innerHTML = "";
-        }
-
-        async function sendMessage() {
-            const text = document.getElementById('msgInput').value;
-            if (!selectedUser || !text) return;
-
-            const pubKey = forge.pki.publicKeyFromPem(selectedUser.publicKey);
-            const encrypted = forge.util.encode64(pubKey.encrypt(text));
-
-            await fetch('/send', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ sender: loggedInUser.username, receiver: selectedUser.username, message: encrypted })
-            });
-            document.getElementById('messages').innerHTML += `<div>أنت: ${text}</div>`;
-            document.getElementById('msgInput').value = "";
-        }
-
-        async function checkMsgs() {
-            const res = await fetch(`/messages/${loggedInUser.username}`);
-            const msgs = await res.json();
-            msgs.forEach(m => {
-                try {
-                    const decrypted = myKeys.privateKey.decrypt(forge.util.decode64(m.message));
-                    document.getElementById('messages').innerHTML += `<div style="color:var(--primary-blue)">${m.sender}: ${decrypted}</div>`;
-                } catch(e) { console.log("Error decrypting"); }
-            });
-        }
-
-        function startSync() {
-            setInterval(() => {
-                fetch('/heartbeat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ username: loggedInUser.username })
-                });
-                if (document.getElementById('searchInput').value === "") loadUsers();
-                checkMsgs();
-            }, 5000);
-        }
-
-        function toggleReset() { document.getElementById('resetBox').classList.toggle('hidden'); }
-    </script>
-</body>
-</html>
+        async function handleReset() {
+            const user = prompt("Enter Username to Reset:");
+            const newPass = prompt("Enter New
