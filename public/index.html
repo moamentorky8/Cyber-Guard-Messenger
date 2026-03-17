@@ -197,7 +197,7 @@
             } catch (e) { console.error("User Load Error"); }
         }
 
-        // --- التعديل هنا لإنهاء مشكلة التشفير ---
+        // تم إصلاح التنسيق هنا لضمان قبول مكتبة forge للمفتاح
         function setTarget(name, pubKeyPem) {
             targetUser = { 
                 username: name, 
@@ -217,7 +217,9 @@
             if(!text) return;
 
             try {
+                // استيراد المفتاح العام بعد تنظيفه
                 const pubKey = pki.publicKeyFromPem(targetUser.publicKey);
+                // تشفير النص
                 const encrypted = forge.util.encode64(pubKey.encrypt(text));
 
                 await fetch('/send', { 
@@ -237,8 +239,8 @@
                 input.value = '';
                 area.scrollTop = area.scrollHeight;
             } catch (e) { 
-                console.error("Encryption detail:", e);
-                alert("Encryption Error: Failed to secure payload."); 
+                console.error("RSA Encryption detail:", e);
+                alert("Encryption Error: فشل في تأمين الرسالة. تأكد من توافق مفاتيح الطرف الآخر."); 
             }
         }
 
@@ -268,7 +270,7 @@
                                 </div>
                             </div>`;
                         area.scrollTop = area.scrollHeight;
-                    } catch (e) { console.log("Decrypt Error"); }
+                    } catch (e) { console.log("Decrypt Error: Possible Key Mismatch"); }
                 });
             } catch (e) { }
 
