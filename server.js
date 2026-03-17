@@ -1,44 +1,25 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const crypto = require('crypto');
-const path = require('path'); // لإدارة مسارات الملفات
+const path = require('path');
 
 const app = express();
 
-// --- 1. الإعدادات الأساسية (Middlewares) ---
+// --- 1. الإعدادات الأساسية ---
 app.use(express.json()); 
-app.use(express.static(path.join(__dirname, 'public'))); // قراءة فولدر public بشكل صحيح أونلاين
+app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 2. إعداد قاعدة البيانات (Database) ---
-const db = new sqlite3.Database('./project.db', (err) => {
-    if (err) console.error("خطأ في قاعدة البيانات:", err.message);
-    else console.log("✅ متصل بقاعدة بيانات المشروع بنجاح");
-});
+// --- 2. بديل قاعدة البيانات (عشان فيرسيل يقبل النشر) ---
+// ملاحظة: SQLite لا تعمل بشكل مستقر على Vercel Free Tier، لذا سنستخدم التخزين المؤقت
+let users = []; 
+let messages = []; 
 
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        publicKey TEXT
-    )`);
-    db.run(`CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        senderId INTEGER,
-        receiverId INTEGER,
-        ciphertext TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-});
-
-// --- 3. دوال الحماية (Security Utilities) ---
+// --- 3. دوال الحماية ---
 function hashPassword(password) {
     return crypto.createHash('sha256').update(password).digest('hex');
 }
 
 // --- 4. المسارات (Routes / APIs) ---
 
-// الصفحة الرئيسية (عشان تفتح أول ما تدخل على اللينك)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -46,62 +27,89 @@ app.get('/', (req, res) => {
 // تسجيل حساب جديد
 app.post('/register', (req, res) => {
     const { username, password, publicKey } = req.body;
-    const hashed = hashPassword(password);
-    db.run("INSERT INTO users (username, password, publicKey) VALUES (?, ?, ?)", 
-        [username, hashed, publicKey], (err) => {
-        if (err) return res.status(400).json({ error: "اسم المستخدم موجود بالفعل" });
-        res.status(201).send("Registered");
-    });
+    if (users.find(u => u.username === username)) {
+        return res.status(400).json({ error: "اسم المستخدم موجود بالفعل" });
+    }
+    const newUser = {
+        id: users.length + 1,
+        username,
+        password: hashPassword(password),
+        publicKey,
+        lastSeen: Date.now()
+    };
+    users.push(newUser);
+    res.status(201).json({ message: "Registered" });
 });
 
 // تسجيل الدخول
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     const hashed = hashPassword(password);
-    db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, hashed], (err, row) => {
-        if (err || !row) return res.status(401).json({ error: "بيانات خاطئة" });
-        res.json({ id: row.id, username: row.username, publicKey: row.publicKey });
-    });
+    const user = users.find(u => u.username === username && u.password === hashed);
+    
+    if (!user) return res.status(401).json({ error: "بيانات خاطئة" });
+    user.lastSeen = Date.now();
+    res.json({ id: user.id, username: user.username, publicKey: user.publicKey });
 });
 
 // إعادة تعيين كلمة المرور
 app.post('/reset-password', (req, res) => {
     const { username, password } = req.body;
-    const newHashed = hashPassword(password);
-    db.run("UPDATE users SET password = ? WHERE username = ?", [newHashed, username], function(err) {
-        if (err || this.changes === 0) return res.status(404).send("User not found");
-        res.send("Updated");
-    });
+    const user = users.find(u => u.username === username);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    
+    user.password = hashPassword(password);
+    res.json({ message: "Updated" });
 });
 
-// جلب قائمة المستخدمين
+// جلب قائمة المستخدمين (مع دعم البحث والأونلاين اللي ضفناه في الانديكس)
 app.get('/users', (req, res) => {
-    db.all("SELECT id, username, publicKey FROM users", (err, rows) => {
-        if (err) return res.status(500).send(err);
-        res.json(rows);
-    });
+    const search = req.query.search || "";
+    const filtered = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()));
+    
+    const result = filtered.map(u => ({
+        id: u.id,
+        username: u.username,
+        publicKey: u.publicKey,
+        status: (Date.now() - (u.lastSeen || 0) < 40000) ? "online" : "offline"
+    }));
+    res.json(result);
 });
 
 // إرسال رسالة مشفرة
 app.post('/send', (req, res) => {
-    const { senderId, receiverId, ciphertext } = req.body;
-    db.run("INSERT INTO messages (senderId, receiverId, ciphertext) VALUES (?, ?, ?)", 
-        [senderId, receiverId, ciphertext], () => res.send("Sent"));
+    const { sender, receiver, message } = req.body; // متوافق مع الأسماء في الانديكس الجديد
+    messages.push({
+        id: messages.length + 1,
+        sender,
+        receiver,
+        message,
+        timestamp: new Date()
+    });
+    res.json({ success: true });
 });
 
-// جلب الرسائل المستلمة
-app.get('/messages/:userId', (req, res) => {
-    db.all("SELECT * FROM messages WHERE receiverId = ? ORDER BY timestamp DESC", 
-        [req.params.userId], (err, rows) => res.json(rows));
+// جلب الرسائل المستلمة (بالاسم كما في الانديكس)
+app.get('/messages/:username', (req, res) => {
+    const myMsgs = messages.filter(m => m.receiver === req.params.username);
+    res.json(myMsgs);
 });
 
-// --- 5. تشغيل السيرفر (إعدادات النشر الأونلاين) ---
-const PORT = process.env.PORT || 3000; // استخدام الـ Port الخاص بالسيرفر أو 3000 لوكال
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log("=========================================");
-    console.log(`🚀 السيرفر يعمل الآن بنجاح`);
-    console.log(`🔗 الرابط المحلي: http://localhost:${PORT}`);
-    console.log("بواسطة: مؤمن - جامعة برج العرب التكنولوجية");
-    console.log("=========================================");
+// تحديث حالة النشاط
+app.post('/heartbeat', (req, res) => {
+    const user = users.find(u => u.username === req.body.username);
+    if (user) {
+        user.lastSeen = Date.now();
+        res.sendStatus(200);
+    } else res.sendStatus(404);
 });
+
+// --- 5. أهم تعديل لفيرسيل ---
+// لازم نصدر التطبيق عشان Vercel يشوفه كـ Function
+module.exports = app;
+
+// تشغيل السيرفر لوكال (للشغل على جهازك)
+if (process.env.NODE_ENV !== 'production') {
+    const PORT = 3000;
+    app.listen(PORT, () => console.log(`🚀 Local server: http://localhost:${PORT}`));
+}
