@@ -126,7 +126,8 @@
             if(!user || !pass) return alert("System Error: Credentials Missing");
 
             const endpoint = isLogin ? '/login' : '/register';
-            const payload = isLogin ? { username: user, password: pass } : { username: user, password: pass, publicKey: myPubKeyPem };
+            // الحل النهائي: تشفير المفتاح العام بـ Base64 لضمان وصوله سليم 100% للسيرفر
+            const payload = isLogin ? { username: user, password: pass } : { username: user, password: pass, publicKey: btoa(myPubKeyPem) };
 
             try {
                 const res = await fetch(endpoint, { 
@@ -181,8 +182,9 @@
                     const isOnline = u.status === 'online';
                     const statusColor = isOnline ? 'bg-green-500 online-pulse' : 'bg-slate-500';
                     
+                    // هنا نمرر المفتاح كما هو (الذي هو الآن Base64)
                     return `
-                    <div onclick="setTarget('${u.username}', \`${u.publicKey.replace(/\n/g, '@@')}\`)" 
+                    <div onclick="setTarget('${u.username}', '${u.publicKey}')" 
                          class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group">
                         <div class="relative">
                             <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs uppercase">${u.username[0]}</div>
@@ -197,18 +199,25 @@
             } catch (e) { console.error("User Load Error"); }
         }
 
-        // تم إصلاح التنسيق هنا لضمان قبول مكتبة forge للمفتاح
-        function setTarget(name, pubKeyPem) {
-            targetUser = { 
-                username: name, 
-                publicKey: pubKeyPem.replace(/@@/g, '\n').trim() 
-            };
-            document.getElementById('current-chat-name').innerText = name;
-            document.getElementById('target-avatar').innerText = name[0].toUpperCase();
-            document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
-            document.getElementById('chat-status').classList.remove('text-slate-500');
-            document.getElementById('chat-status').classList.add('text-cyber');
-            document.getElementById('msg-area').innerHTML = '';
+        // تم تغيير الفانكشن لتفك تشفير المفتاح قبل استخدامه
+        function setTarget(name, pubKeyB64) {
+            try {
+                // فك الـ Base64 ليرجع المفتاح لصيغته الأصلية PEM
+                const decodedKey = atob(pubKeyB64);
+                targetUser = { 
+                    username: name, 
+                    publicKey: decodedKey.trim() 
+                };
+                document.getElementById('current-chat-name').innerText = name;
+                document.getElementById('target-avatar').innerText = name[0].toUpperCase();
+                document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
+                document.getElementById('chat-status').classList.remove('text-slate-500');
+                document.getElementById('chat-status').classList.add('text-cyber');
+                document.getElementById('msg-area').innerHTML = '';
+            } catch (e) {
+                console.error("Key Decode Error", e);
+                alert("Key Sync Error: فشل في معالجة مفتاح الطرف الآخر.");
+            }
         }
 
         async function sendMessage() {
@@ -217,9 +226,7 @@
             if(!text) return;
 
             try {
-                // استيراد المفتاح العام بعد تنظيفه
                 const pubKey = pki.publicKeyFromPem(targetUser.publicKey);
-                // تشفير النص
                 const encrypted = forge.util.encode64(pubKey.encrypt(text));
 
                 await fetch('/send', { 
