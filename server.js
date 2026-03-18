@@ -1,129 +1,83 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const mongoose = require('mongoose'); // إضافة المكتبة المطلوبة
+const mongoose = require('mongoose');
 
 const app = express();
-
-// --- 1. الإعدادات الأساسية ---
-app.use(express.json()); 
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 2. الربط بقاعدة بيانات جوجل (MongoDB Atlas) ---
-// اللينك بتاعك متظبط وجاهز
-const MONGO_URI = "mongodb+srv://amigomomen_db_user:LraKROtj8ErCEboX@cluster0.v6xq9ce.mongodb.net/CyberMessengerDB?retryWrites=true&w=majority&appName=Cluster0";
+// رابط المونجو بتاعك (تأكد من الباسوورد)
+const MONGO_URI = "mongodb+srv://amigomomen_db_user:LraKROtj8ErCEboX@cluster0.v6xq9ce.mongodb.net/CyberMessenger?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ مبروك يا مؤمن.. اتربطنا بقاعدة البيانات الدايمة!"))
-    .catch(err => console.error("❌ فشل الاتصال بالمونجو:", err));
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch(err => console.error("❌ Connection Error:", err));
 
-// --- 3. تعريف الجداول (Schemas) لضمان حفظ البيانات للأبد ---
+// تعريف الجداول
 const userSchema = new mongoose.Schema({
-    username: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
+    username: { type: String, unique: true },
+    password: { type: String },
     publicKey: String,
-    fullName: String, // ميزة البروفايل: الاسم الكامل
-    bio: String,      // ميزة البروفايل: نبذة
-    avatar: String,   // ميزة البروفايل: الصورة
     lastSeen: { type: Date, default: Date.now }
 });
+const User = mongoose.model('User', userSchema);
 
 const messageSchema = new mongoose.Schema({
-    sender: String,
-    receiver: String,
-    message: String,
-    timestamp: { type: Date, default: Date.now }
+    sender: String, receiver: String, message: String, timestamp: { type: Date, default: Date.now }
 });
-
-const User = mongoose.model('User', userSchema);
 const Message = mongoose.model('Message', messageSchema);
 
-// --- 4. دوال الحماية ---
-function hashPassword(password) {
-    return crypto.createHash('sha256').update(password).digest('hex');
-}
+// دوال الحماية
+function hashPassword(p) { return crypto.createHash('sha256').update(p).digest('hex'); }
 
-// --- 5. المسارات (Routes / APIs) المحدثة ---
+// الروابط (Routes)
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// تسجيل حساب جديد مع دعم البروفايل
 app.post('/register', async (req, res) => {
     try {
-        const { username, password, publicKey, fullName, bio } = req.body;
-        const newUser = new User({
-            username,
-            password: hashPassword(password),
-            publicKey,
-            fullName: fullName || username,
-            bio: bio || "Cyber Security Agent",
-            avatar: "default.png"
-        });
+        const { username, password, publicKey } = req.body;
+        const newUser = new User({ username, password: hashPassword(password), publicKey });
         await newUser.save();
-        res.status(201).json({ message: "Registered Successfully" });
-    } catch (err) {
-        res.status(400).json({ error: "اسم المستخدم موجود بالفعل" });
-    }
+        res.status(201).json({ message: "Registered" });
+    } catch (e) { res.status(400).json({ error: "User exists" }); }
 });
 
-// تسجيل الدخول
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    const hashed = hashPassword(password);
-    const user = await User.findOne({ username, password: hashed });
-    
-    if (!user) return res.status(401).json({ error: "بيانات خاطئة" });
-    user.lastSeen = Date.now();
-    await user.save();
-    res.json({ id: user._id, username: user.username, publicKey: user.publicKey });
+    const user = await User.findOne({ username, password: hashPassword(password) });
+    if (!user) return res.status(401).json({ error: "Wrong credentials" });
+    user.lastSeen = Date.now(); await user.save();
+    res.json({ username: user.username, publicKey: user.publicKey });
 });
 
-// ميزة البحث المتقدم عن المستخدمين (باليوزر أو بالاسم الكامل)
 app.get('/users', async (req, res) => {
     const search = req.query.search || "";
-    const filtered = await User.find({
-        $or: [
-            { username: { $regex: search, $options: 'i' } },
-            { fullName: { $regex: search, $options: 'i' } }
-        ]
-    });
-    
-    const result = filtered.map(u => ({
-        username: u.username,
-        fullName: u.fullName,
-        publicKey: u.publicKey,
+    const users = await User.find({ username: { $regex: search, $options: 'i' } });
+    res.json(users.map(u => ({
+        username: u.username, publicKey: u.publicKey,
         status: (Date.now() - u.lastSeen < 40000) ? "online" : "offline"
-    }));
-    res.json(result);
+    })));
 });
 
-// إرسال رسالة وحفظها في قاعدة البيانات
 app.post('/send', async (req, res) => {
     const { sender, receiver, message } = req.body;
-    const newMessage = new Message({ sender, receiver, message });
-    await newMessage.save();
+    await new Message({ sender, receiver, message }).save();
     res.json({ success: true });
 });
 
-// جلب الرسائل الخاصة بالمستخدم فقط
 app.get('/messages/:username', async (req, res) => {
-    const myMsgs = await Message.find({ receiver: req.params.username });
-    res.json(myMsgs);
+    const msgs = await Message.find({ receiver: req.params.username });
+    res.json(msgs);
 });
 
-// تحديث حالة النشاط
 app.post('/heartbeat', async (req, res) => {
     await User.findOneAndUpdate({ username: req.body.username }, { lastSeen: Date.now() });
     res.sendStatus(200);
 });
 
-// تصدير التطبيق لفيرسيل
 module.exports = app;
 
-// تشغيل السيرفر لوكال
 if (process.env.NODE_ENV !== 'production') {
-    const PORT = 3000;
-    app.listen(PORT, () => console.log(`🚀 Local server: http://localhost:${PORT}`));
+    app.listen(3000, () => console.log(`🚀 Server: http://localhost:3000`));
 }
