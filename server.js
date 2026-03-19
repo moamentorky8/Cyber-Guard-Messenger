@@ -1,83 +1,155 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const mongoose = require('mongoose');
+const admin = require('firebase-admin');
 
+// 1. إعداد الاتصال بجوجل (Firebase Realtime Database)
+const serviceAccount = require('./serviceAccount.json'); 
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  // استبدل الرابط اللي تحت بالرابط اللي آخره firebaseio.com بتاعك
+  databaseURL: "https://cybermessenger-default-rtdb.firebaseio.com/" 
+});
+
+const db = admin.database();
 const app = express();
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// رابط المونجو بتاعك (تأكد من الباسوورد)
-const MONGO_URI = "mongodb+srv://amigomomen_db_user:LraKROtj8ErCEboX@cluster0.v6xq9ce.mongodb.net/CyberMessenger?retryWrites=true&w=majority";
+// 2. دالة تشفير الباسوورد (عشان الأمان)
+function hashPassword(password) {
+    return crypto.createHash('sha256').update(password).digest('hex');
+}
 
-mongoose.connect(MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected"))
-    .catch(err => console.error("❌ Connection Error:", err));
+// 3. المسارات (Routes)
 
-// تعريف الجداول
-const userSchema = new mongoose.Schema({
-    username: { type: String, unique: true },
-    password: { type: String },
-    publicKey: String,
-    lastSeen: { type: Date, default: Date.now }
+// الصفحة الرئيسية
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-const User = mongoose.model('User', userSchema);
 
-const messageSchema = new mongoose.Schema({
-    sender: String, receiver: String, message: String, timestamp: { type: Date, default: Date.now }
-});
-const Message = mongoose.model('Message', messageSchema);
-
-// دوال الحماية
-function hashPassword(p) { return crypto.createHash('sha256').update(p).digest('hex'); }
-
-// الروابط (Routes)
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
+// تسجيل حساب جديد في جوجل Cloud
 app.post('/register', async (req, res) => {
     try {
-        const { username, password, publicKey } = req.body;
-        const newUser = new User({ username, password: hashPassword(password), publicKey });
-        await newUser.save();
-        res.status(201).json({ message: "Registered" });
-    } catch (e) { res.status(400).json({ error: "User exists" }); }
+        const { username, password, publicKey, fullName, bio } = req.body;
+        const userRef = db.ref('users/' + username);
+
+        // التأكد إذا كان المستخدم موجوداً
+        const snapshot = await userRef.once('value');
+        if (snapshot.exists()) {
+            return res.status(400).json({ error: "Agent already exists!" });
+        }
+
+        await userRef.set({
+            username,
+            password: hashPassword(password),
+            publicKey: publicKey, // مفتاح الـ RSA
+            fullName: fullName || username,
+            bio: bio || "Cyber Security Agent",
+            lastSeen: Date.now()
+        });
+
+        res.status(201).json({ message: "Identity created on Google Cloud" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// تسجيل الدخول
 app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username, password: hashPassword(password) });
-    if (!user) return res.status(401).json({ error: "Wrong credentials" });
-    user.lastSeen = Date.now(); await user.save();
-    res.json({ username: user.username, publicKey: user.publicKey });
+    try {
+        const { username, password } = req.body;
+        const userRef = db.ref('users/' + username);
+        const snapshot = await userRef.once('value');
+        const user = snapshot.val();
+
+        if (!user || user.password !== hashPassword(password)) {
+            return res.status(401).json({ error: "Invalid Credentials" });
+        }
+
+        // تحديث آخر ظهور
+        await userRef.update({ lastSeen: Date.now() });
+        res.json({ username: user.username, publicKey: user.publicKey });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// جلب المستخدمين مع ميزة البحث المتقدم (بالاسم أو اليوزر)
 app.get('/users', async (req, res) => {
-    const search = req.query.search || "";
-    const users = await User.find({ username: { $regex: search, $options: 'i' } });
-    res.json(users.map(u => ({
-        username: u.username, publicKey: u.publicKey,
-        status: (Date.now() - u.lastSeen < 40000) ? "online" : "offline"
-    })));
+    try {
+        const search = (req.query.search || "").toLowerCase();
+        const usersRef = db.ref('users');
+        const snapshot = await usersRef.once('value');
+        const allUsers = snapshot.val() || {};
+
+        const result = Object.values(allUsers)
+            .filter(u => 
+                u.username.toLowerCase().includes(search) || 
+                (u.fullName && u.fullName.toLowerCase().includes(search))
+            )
+            .map(u => ({
+                username: u.username,
+                fullName: u.fullName,
+                publicKey: u.publicKey,
+                status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline"
+            }));
+
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// إرسال رسالة مشفرة وحفظها للأبد
 app.post('/send', async (req, res) => {
-    const { sender, receiver, message } = req.body;
-    await new Message({ sender, receiver, message }).save();
-    res.json({ success: true });
+    try {
+        const { sender, receiver, message } = req.body;
+        const msgRef = db.ref('messages').push(); // إنشاء سطر جديد تلقائي
+
+        await msgRef.set({
+            sender,
+            receiver,
+            message,
+            timestamp: Date.now()
+        });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// جلب رسائل المستخدم فقط (Real-time Fetch)
 app.get('/messages/:username', async (req, res) => {
-    const msgs = await Message.find({ receiver: req.params.username });
-    res.json(msgs);
+    try {
+        const username = req.params.username;
+        const msgRef = db.ref('messages');
+        
+        // جلب الرسائل التي تخص هذا المستخدم فقط
+        const snapshot = await msgRef.orderByChild('receiver').equalTo(username).once('value');
+        const msgs = snapshot.val() || {};
+        
+        res.json(Object.values(msgs));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
+// تحديث حالة النشاط (Heartbeat)
 app.post('/heartbeat', async (req, res) => {
-    await User.findOneAndUpdate({ username: req.body.username }, { lastSeen: Date.now() });
+    const { username } = req.body;
+    if (username) {
+        await db.ref('users/' + username).update({ lastSeen: Date.now() });
+    }
     res.sendStatus(200);
 });
 
+// تصدير التطبيق لفيرسيل
 module.exports = app;
 
+// تشغيل السيرفر لوكال (للتجربة)
 if (process.env.NODE_ENV !== 'production') {
-    app.listen(3000, () => console.log(`🚀 Server: http://localhost:3000`));
+    app.listen(3000, () => console.log(`🚀 Google Cloud Server: http://localhost:3000`));
 }
