@@ -7,23 +7,35 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعدادات الربط بـ Firebase (النسخة الجوكر المتوافقة مع كل البيئات) ---
+// --- 1. إعدادات الربط بـ Firebase (النسخة الذكية والمؤمنة) ---
 if (!admin.apps.length) {
     try {
-        // محاولة الربط المحلي باستخدام ملف المفتاح (للمناقشة بكرة في الكلية)
-        const serviceAccount = require("./serviceAccountKey.json");
+        let serviceAccount;
+
+        // التحقق: هل نحن على Vercel (Cloud) أم Localhost؟
+        if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+            // القراءة من الـ Environment Variables (للأمان على Vercel)
+            serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            console.log("☁️ Mode: Cloud Connection (Vercel Environment)");
+        } else {
+            // القراءة من ملف الـ JSON المحلي (للمناقشة بكرة في الكلية)
+            serviceAccount = require("./serviceAccountKey.json");
+            console.log("✅ Mode: Local Connection (Using Service Account Key)");
+        }
+
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
         });
-        console.log("✅ Mode: Local/Manual Connection (Using Service Account Key)");
     } catch (e) {
-        // الربط التلقائي في حالة الرفع على السحاب (Vercel)
-        admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-            databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
-        });
-        console.log("☁️ Mode: Cloud Connection (Using Application Default Credentials)");
+        console.error("❌ Firebase Auth Error:", e.message);
+        // محاولة أخيرة للربط الافتراضي في حالة فشل ما سبق
+        if (!admin.apps.length) {
+            admin.initializeApp({
+                credential: admin.credential.applicationDefault(),
+                databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
+            });
+        }
     }
 }
 
