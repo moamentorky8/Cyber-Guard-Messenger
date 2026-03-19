@@ -7,18 +7,18 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- الربط الآمن بالسحابة (عن طريق Vercel Environment Variables) ---
+// --- 1. الربط الآمن بالسحابة (عن طريق Vercel Environment Variables) ---
 const MONGO_URI = process.env.MONGO_URI;
 
-if (MONGO_URI) {
-    mongoose.connect(MONGO_URI)
-        .then(() => console.log("✅ Database Connected Successfully!"))
-        .catch(err => console.error("❌ DB Connection Error:", err.message));
-} else {
-    console.warn("⚠️ تحذير: لم يتم العثور على MONGO_URI في إعدادات Vercel!");
+if (!MONGO_URI) {
+    console.error("⚠️ خطأ: لم يتم العثور على MONGO_URI في إعدادات Vercel!");
 }
 
-// تعريف الجداول (الـ ROM السحابية)
+mongoose.connect(MONGO_URI || "")
+    .then(() => console.log("✅ تم الاتصال بنجاح بـ MongoDB Atlas"))
+    .catch(err => console.error("❌ فشل الاتصال بالداتابيز:", err.message));
+
+// --- 2. تعريف الجداول (Schemas) ---
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
@@ -28,8 +28,8 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 const messageSchema = new mongoose.Schema({
-    sender: String,
-    receiver: String,
+    sender: { type: String, lowercase: true },
+    receiver: { type: String, lowercase: true },
     message: String,
     timestamp: { type: Date, default: Date.now }
 });
@@ -40,11 +40,11 @@ function hashPassword(p) {
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
 
-// --- الروابط الأساسية ---
+// --- 3. الروابط (Routes) ---
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// تسجيل مستخدم جديد (صاروخ 🚀)
+// تسجيل مستخدم جديد 🚀
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
@@ -59,8 +59,9 @@ app.post('/register', async (req, res) => {
         await newUser.save();
         res.status(201).json({ message: "Registered Successfully" });
     } catch (e) {
+        console.error("Register Error Details:", e.message);
         if (e.code === 11000) return res.status(400).json({ error: "الاسم ده مستخدم قبل كدة!" });
-        res.status(500).json({ error: "خطأ في قاعدة البيانات" });
+        res.status(500).json({ error: "مشكلة في الداتابيز: " + e.message });
     }
 });
 
@@ -73,7 +74,7 @@ app.post('/login', async (req, res) => {
             password: hashPassword(password) 
         });
 
-        if (!user) return res.status(401).json({ error: "اليوزر نيم أو الباسوورد غلط" });
+        if (!user) return res.status(401).json({ error: "بيانات غلط" });
 
         user.lastSeen = Date.now();
         await user.save();
@@ -81,7 +82,7 @@ app.post('/login', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Login Error" }); }
 });
 
-// جلب قائمة المستخدمين (البحث)
+// جلب قائمة المستخدمين
 app.get('/users', async (req, res) => {
     try {
         const users = await User.find({});
@@ -93,16 +94,15 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// إرسال رسالة
+// إرسال واستقبال الرسائل
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
         await new Message({ sender, receiver, message }).save();
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "فشل في إرسال الرسالة" }); }
+    } catch (e) { res.status(500).json({ error: "Failed to send" }); }
 });
 
-// استقبال الرسائل
 app.get('/messages/:username', async (req, res) => {
     try {
         const msgs = await Message.find({ receiver: req.params.username.toLowerCase() });
