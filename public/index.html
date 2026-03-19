@@ -124,6 +124,7 @@
 
             if(!user || !pass) return alert("System Error: Credentials Missing");
 
+            // الربط بفايربيز عبر السيرفر الخاص بك
             const endpoint = isLogin ? '/login' : '/register';
             const payload = { username: user, password: pass };
             if (!isLogin) payload.publicKey = myPubKeyPem;
