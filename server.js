@@ -47,16 +47,33 @@ function hashPassword(p) {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // تسجيل مستخدم جديد 🚀
+// تسجيل مستخدم جديد 🚀 (النسخة اللي بتطبع الإيرور بالتفصيل)
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
-        if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة يا بطل" });
+        
+        // لوجز عشان نشوف المشكلة في Vercel
+        console.log("📝 محاولة تسجيل يوزر جديد:", username);
+
+        if (!username || !password) {
+            return res.status(400).json({ error: "بيانات ناقصة يا بطل" });
+        }
 
         const newUser = new User({ 
             username: username.toLowerCase().trim(), 
             password: hashPassword(password), 
             publicKey: publicKey || "" 
         });
+
+        await newUser.save();
+        console.log(`✅ تم حفظ المستخدم بنجاح: ${username}`);
+        res.status(201).json({ message: "Registered Successfully", username: newUser.username });
+    } catch (e) {
+        console.error("❌ Database Save Error:", e.message); 
+        // هنا السيرفر هيبعتلك السبب الحقيقي في الـ Alert
+        res.status(500).json({ error: "خطأ في الداتابيز: " + e.message });
+    }
+});
 
         await newUser.save();
         res.status(201).json({ message: "Registered Successfully", username: newUser.username });
