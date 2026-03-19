@@ -7,13 +7,24 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعدادات الربط بـ Firebase ---
-// ملاحظة: Vercel بيقرأ الـ Credentials تلقائياً من الـ Environment Variables
+// --- 1. إعدادات الربط بـ Firebase (النسخة الجوكر المتوافقة مع كل البيئات) ---
 if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.applicationDefault(), 
-        databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
-    });
+    try {
+        // محاولة الربط المحلي باستخدام ملف المفتاح (للمناقشة بكرة في الكلية)
+        const serviceAccount = require("./serviceAccountKey.json");
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
+        });
+        console.log("✅ Mode: Local/Manual Connection (Using Service Account Key)");
+    } catch (e) {
+        // الربط التلقائي في حالة الرفع على السحاب (Vercel)
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
+        });
+        console.log("☁️ Mode: Cloud Connection (Using Application Default Credentials)");
+    }
 }
 
 const db = admin.database();
@@ -72,7 +83,7 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// قائمة المستخدمين
+// قائمة المستخدمين النشطين
 app.get('/users', async (req, res) => {
     try {
         const usersRef = db.ref("users");
@@ -89,7 +100,7 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// إرسال واستقبال الرسائل
+// إرسال رسالة مشفرة
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
@@ -104,6 +115,7 @@ app.post('/send', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
 });
 
+// استقبال الرسائل وحذفها (Ephemeral Messaging)
 app.get('/messages/:username', async (req, res) => {
     try {
         const target = req.params.username.toLowerCase().trim();
@@ -114,7 +126,6 @@ app.get('/messages/:username', async (req, res) => {
         
         const msgsList = Object.values(msgsData);
         
-        // مسح الرسائل بعد القراءة لضمان الخصوصية (حسب منطق مشروعك)
         if (msgsList.length > 0) {
             const updates = {};
             Object.keys(msgsData).forEach(key => { updates[key] = null; });
@@ -130,5 +141,5 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 module.exports = app;
 
 if (process.env.NODE_ENV !== 'production') {
-    app.listen(3000, () => console.log(`🚀 Firebase Server Local: http://localhost:3000`));
+    app.listen(3000, () => console.log(`🚀 Final Stable Server Running: http://localhost:3000`));
 }
