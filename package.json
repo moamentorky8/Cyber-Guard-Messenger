@@ -4,8 +4,7 @@
   "description": "Secure Messaging System with MongoDB and RSA",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -13,6 +12,7 @@
     "crypto": "^1.0.1",
     "path": "^0.12.7"
   },
-  "author": "Moamen Abdelfattah",
-  "license": "ISC"
+  "engines": {
+    "node": "22.x"
+  }
 }
