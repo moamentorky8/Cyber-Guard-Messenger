@@ -7,30 +7,34 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعدادات الربط السحابي (Anti-Timeout) ---
+// --- 1. إعدادات الربط السحابي (النسخة الفولاذية) ---
 const MONGO_URI = process.env.MONGO_URI;
 
 const dbOptions = {
-    serverSelectionTimeoutMS: 15000, // يصبر 15 ثانية كاملة للربط
-    socketTimeoutMS: 45000,          // يحافظ على استقرار القناة
-    family: 4                        // سرعة الوصول عبر IPv4
+    serverSelectionTimeoutMS: 30000, // استنى 30 ثانية كاملة (أقصى حاجة)
+    socketTimeoutMS: 60000,          // حافظ على القناة مفتوحة دقيقة كاملة
+    connectTimeoutMS: 30000,
+    family: 4                        // IPv4 لإلغاء أي تأخير في الـ DNS
 };
 
-// وظيفة الربط التلقائي
-const connectDB = async () => {
+// وظيفة الربط الذكي - بتحاول 3 مرات لو فشلت
+const connectDB = async (retryCount = 5) => {
     try {
         if (mongoose.connection.readyState === 1) return;
+        console.log("⏳ Attempting to connect to MongoDB Cloud...");
         await mongoose.connect(MONGO_URI, dbOptions);
-        console.log("🚀 MongoDB Atlas Connected Successfully!");
+        console.log("🚀 SUCCESS: MongoDB Atlas is now Online and Stable!");
     } catch (err) {
-        console.error("❌ Database Connection Error:", err.message);
-        setTimeout(connectDB, 5000); // إعادة محاولة الاتصال كل 5 ثواني لو فشل
+        console.error(`❌ Connection failed. Retries left: ${retryCount}. Error:`, err.message);
+        if (retryCount > 0) {
+            setTimeout(() => connectDB(retryCount - 1), 5000);
+        }
     }
 };
 
 connectDB();
 
-// --- 2. تعريف قواعد البيانات (Schemas) ---
+// --- 2. تعريف الجداول (الـ Schemas) ---
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
@@ -48,24 +52,22 @@ const messageSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 const Message = mongoose.model('Message', messageSchema);
 
-// دالة تشفير الباسورد SHA-256
 function hashPassword(p) { 
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
 
-// --- 3. المسارات (API Routes) ---
+// --- 3. المسارات (API Routes) مع معالجة احترافية للأخطاء ---
 
-// أ- تسجيل مستخدم جديد (Register)
+// تسجيل مستخدم جديد
 app.post('/register', async (req, res) => {
     try {
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: "السيرفر بيحاول يربط بالداتابيز، جرب كمان ثانية" });
+        }
         const { username, password, publicKey } = req.body;
         if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة" });
 
         const cleanUser = username.toLowerCase().trim();
-        const existingUser = await User.findOne({ username: cleanUser });
-        
-        if (existingUser) return res.status(400).json({ error: "هذا الاسم مسجل بالفعل" });
-
         const newUser = new User({ 
             username: cleanUser, 
             password: hashPassword(password), 
@@ -75,42 +77,39 @@ app.post('/register', async (req, res) => {
         await newUser.save();
         res.status(201).json({ message: "Success", username: newUser.username });
     } catch (e) {
-        res.status(500).json({ error: "خطأ في السيرفر: " + e.message });
+        console.error("Register Error:", e);
+        if (e.code === 11000) return res.status(400).json({ error: "الاسم ده محجوز" });
+        res.status(500).json({ error: "عذراً، جاري تهيئة الداتابيز.. جرب مرة تانية" });
     }
 });
 
-// ب- تسجيل الدخول (Login)
+// تسجيل الدخول
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         const cleanUser = username.toLowerCase().trim();
-        const hashedPass = hashPassword(password);
-
-        const user = await User.findOne({ username: cleanUser, password: hashedPass });
+        const user = await User.findOne({ username: cleanUser, password: hashPassword(password) });
+        
         if (!user) return res.status(401).json({ error: "اليوزر أو الباسورد غلط" });
 
         user.lastSeen = Date.now();
         await user.save();
         res.json({ username: user.username, publicKey: user.publicKey });
-    } catch (e) {
-        res.status(500).json({ error: "فشل الدخول: " + e.message });
-    }
+    } catch (e) { res.status(500).json({ error: "خطأ فني في السيرفر" }); }
 });
 
-// ج- إعادة تعيين الباسورد (Reset)
+// باقي الروابط (Reset, Users, Send, Messages)
 app.post('/reset-password', async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await User.findOne({ username: username.toLowerCase().trim() });
         if (!user) return res.status(404).json({ error: "اليوزر مش موجود" });
-
         user.password = hashPassword(password);
         await user.save();
-        res.json({ message: "تم تحديث الباسورد" });
+        res.json({ message: "تم التحديث" });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// د- قائمة المستخدمين
 app.get('/users', async (req, res) => {
     try {
         const users = await User.find({});
@@ -122,13 +121,12 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// هـ- إرسال واستقبال الرسائل
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
         await new Message({ sender, receiver, message }).save();
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
+    } catch (e) { res.status(500).json({ error: "فشل الإرسال" }); }
 });
 
 app.get('/messages/:username', async (req, res) => {
@@ -140,14 +138,10 @@ app.get('/messages/:username', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// الصفحة الرئيسية (لـ Vercel)
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 module.exports = app;
 
-// للتشغيل المحلي فقط
 if (process.env.NODE_ENV !== 'production') {
-    app.listen(3000, () => console.log(`🚀 Server ready on http://localhost:3000`));
+    app.listen(3000, () => console.log(`🚀 Local Server: http://localhost:3000`));
 }
