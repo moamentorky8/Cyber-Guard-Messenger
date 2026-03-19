@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-    console.error("⚠️ خطأ: لم يتم العثور على MONGO_URI في إعدادات Vercel!");
+    console.error("⚠️ تحذير: لم يتم العثور على MONGO_URI في إعدادات Vercel!");
 }
 
 mongoose.connect(MONGO_URI || "")
@@ -24,18 +24,20 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     publicKey: { type: String, default: "" },
     lastSeen: { type: Date, default: Date.now }
-});
+}, { strict: false }); // لضمان مرونة البيانات
+
 const User = mongoose.model('User', userSchema);
 
 const messageSchema = new mongoose.Schema({
-    sender: { type: String, lowercase: true },
-    receiver: { type: String, lowercase: true },
+    sender: { type: String, lowercase: true, trim: true },
+    receiver: { type: String, lowercase: true, trim: true },
     message: String,
     timestamp: { type: Date, default: Date.now }
 });
+
 const Message = mongoose.model('Message', messageSchema);
 
-// دالة التشفير (SHA-256)
+// دالة التشفير الموحدة (SHA-256) - دي سر نجاح اللوج إن
 function hashPassword(p) { 
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
@@ -48,38 +50,56 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
-        if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة" });
+        if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة يا بطل" });
 
         const newUser = new User({ 
-            username, 
+            username: username.toLowerCase().trim(), 
             password: hashPassword(password), 
             publicKey: publicKey || "" 
         });
 
         await newUser.save();
-        res.status(201).json({ message: "Registered Successfully" });
+        console.log(`👤 New Agent Registered: ${username}`);
+        res.status(201).json({ message: "Registered Successfully", username: newUser.username });
     } catch (e) {
-        console.error("Register Error Details:", e.message);
-        if (e.code === 11000) return res.status(400).json({ error: "الاسم ده مستخدم قبل كدة!" });
+        console.error("Register Error:", e.message);
+        if (e.code === 11000) return res.status(400).json({ error: "الاسم ده محجوز لعميل تاني!" });
         res.status(500).json({ error: "مشكلة في الداتابيز: " + e.message });
     }
 });
 
-// تسجيل الدخول
+// تسجيل الدخول (النسخة الذكية) 🔓
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: "ادخل البيانات كاملة" });
+
+        const cleanUser = username.toLowerCase().trim();
+        const hashedPass = hashPassword(password);
+
+        // البحث عن اليوزر ومطابقة الباسوورد المتشفر
         const user = await User.findOne({ 
-            username: username.toLowerCase(), 
-            password: hashPassword(password) 
+            username: cleanUser, 
+            password: hashedPass 
         });
 
-        if (!user) return res.status(401).json({ error: "بيانات غلط" });
+        if (!user) {
+            return res.status(401).json({ error: "بيانات غلط (تأكد من اليوزر والباسوورد)" });
+        }
 
+        // تحديث حالة الظهور
         user.lastSeen = Date.now();
         await user.save();
-        res.json({ username: user.username, publicKey: user.publicKey });
-    } catch (e) { res.status(500).json({ error: "Login Error" }); }
+        
+        console.log(`✅ Agent Authorized: ${cleanUser}`);
+        res.json({ 
+            username: user.username, 
+            publicKey: user.publicKey 
+        });
+    } catch (e) {
+        console.error("Login Error:", e.message);
+        res.status(500).json({ error: "مشكلة فنية في السيرفر" });
+    }
 });
 
 // جلب قائمة المستخدمين
@@ -94,21 +114,30 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// إرسال واستقبال الرسائل
+// إرسال رسالة
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
-        await new Message({ sender, receiver, message }).save();
+        await new Message({ 
+            sender: sender.toLowerCase().trim(), 
+            receiver: receiver.toLowerCase().trim(), 
+            message 
+        }).save();
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Failed to send" }); }
+    } catch (e) { res.status(500).json({ error: "فشل الإرسال" }); }
 });
 
+// استقبال الرسائل
 app.get('/messages/:username', async (req, res) => {
     try {
-        const msgs = await Message.find({ receiver: req.params.username.toLowerCase() });
+        const msgs = await Message.find({ 
+            receiver: req.params.username.toLowerCase().trim() 
+        });
         res.json(msgs);
+        // مسح الرسائل بعد استلامها (اختياري لزيادة الأمان)
+        // await Message.deleteMany({ receiver: req.params.username.toLowerCase().trim() });
     } catch (e) { res.json([]); }
-});
+} );
 
 module.exports = app;
 
