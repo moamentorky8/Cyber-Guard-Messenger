@@ -7,13 +7,28 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. الربط بقاعدة البيانات ---
-// المغير MONGO_URI لازم يكون موجود في إعدادات Vercel
+// --- 1. الربط الحديدي بالداتابيز (ضد الـ Timeout) ---
 const MONGO_URI = process.env.MONGO_URI;
 
-mongoose.connect(MONGO_URI || "")
-    .then(() => console.log("✅ MongoDB Cloud Connected Successfully"))
-    .catch(err => console.error("❌ Database Connection Error:", err.message));
+// إعدادات الاتصال المتقدمة
+const dbOptions = {
+    serverSelectionTimeoutMS: 10000, // يصبر 10 ثواني قبل ما يقول Timeout
+    socketTimeoutMS: 45000,          // يحافظ على القناة مفتوحة
+    family: 4                        // يجبره يستخدم IPv4 عشان السرعة في Vercel
+};
+
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGO_URI, dbOptions);
+        console.log("✅ MongoDB Cloud Connected & Ready!");
+    } catch (err) {
+        console.error("❌ Connection failed, retrying...", err.message);
+        // لو فشل يحاول تاني بعد 5 ثواني بدل ما السيرفر يقع
+        setTimeout(connectDB, 5000);
+    }
+};
+
+connectDB();
 
 // --- 2. تعريف الجداول (Schemas) ---
 const User = mongoose.model('User', new mongoose.Schema({
@@ -30,24 +45,19 @@ const Message = mongoose.model('Message', new mongoose.Schema({
     timestamp: { type: Date, default: Date.now }
 }));
 
-// دالة تشفير كلمة المرور (SHA-256) لحمايتها في الداتابيز
 function hashPassword(p) { 
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
 
 // --- 3. الروابط (Routes) ---
 
-// الصفحة الرئيسية
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// أ- تسجيل مستخدم جديد (Register)
+// تسجيل مستخدم جديد (Register) - النسخة المستقرة
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
-        
-        if (!username || !password) {
-            return res.status(400).json({ error: "البيانات غير مكتملة" });
-        }
+        if (!username || !password) return res.status(400).json({ error: "البيانات ناقصة" });
 
         const newUser = new User({ 
             username: username.toLowerCase().trim(), 
@@ -56,14 +66,15 @@ app.post('/register', async (req, res) => {
         });
 
         await newUser.save();
-        res.status(201).json({ message: "تم التسجيل بنجاح", username: newUser.username });
+        res.status(201).json({ message: "Registered Successfully", username: newUser.username });
     } catch (e) {
-        if (e.code === 11000) return res.status(400).json({ error: "الاسم ده مسجل مسبقاً" });
+        console.error("❌ Error in Register:", e.message);
+        if (e.code === 11000) return res.status(400).json({ error: "الاسم ده محجوز" });
         res.status(500).json({ error: "خطأ في الداتابيز: " + e.message });
     }
 });
 
-// ب- تسجيل الدخول (Login)
+// تسجيل الدخول (Login)
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -72,33 +83,28 @@ app.post('/login', async (req, res) => {
             password: hashPassword(password) 
         });
 
-        if (!user) return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
+        if (!user) return res.status(401).json({ error: "بيانات غلط" });
 
         user.lastSeen = Date.now();
         await user.save();
         res.json({ username: user.username, publicKey: user.publicKey });
-    } catch (e) { 
-        res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "خطأ في الاتصال بالسيرفر" }); }
 });
 
-// ج- إعادة تعيين كلمة المرور (Reset Password)
+// إعادة تعيين الباسورد (Reset Password) - شغالة 100%
 app.post('/reset-password', async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await User.findOne({ username: username.toLowerCase().trim() });
-        
-        if (!user) return res.status(404).json({ error: "المستخدم غير موجود" });
+        if (!user) return res.status(404).json({ error: "اليوزر مش موجود" });
 
         user.password = hashPassword(password);
         await user.save();
-        res.json({ message: "تم تحديث كلمة المرور بنجاح" });
-    } catch (e) { 
-        res.status(500).json({ error: "فشل تحديث كلمة المرور" }); 
-    }
+        res.json({ message: "تم تحديث الباسورد بنجاح" });
+    } catch (e) { res.status(500).json({ error: "فشل التحديث: " + e.message }); }
 });
 
-// د- جلب قائمة المستخدمين النشطين
+// جلب اليوزرات
 app.get('/users', async (req, res) => {
     try {
         const users = await User.find({});
@@ -110,7 +116,7 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// هـ- إرسال رسالة مشفرة
+// إرسال رسائل
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
@@ -120,27 +126,21 @@ app.post('/send', async (req, res) => {
             message 
         }).save();
         res.json({ success: true });
-    } catch (e) { 
-        res.status(500).json({ error: "فشل إرسال الرسالة" }); 
-    }
+    } catch (e) { res.status(500).json({ error: "فشل الإرسال" }); }
 });
 
-// و- استقبال الرسائل (وتمسح فوراً بعد القراءة لزيادة الأمان)
+// استقبال الرسائل
 app.get('/messages/:username', async (req, res) => {
     try {
         const target = req.params.username.toLowerCase().trim();
         const msgs = await Message.find({ receiver: target });
-        
-        if (msgs.length > 0) {
-            await Message.deleteMany({ receiver: target });
-        }
+        if (msgs.length > 0) await Message.deleteMany({ receiver: target });
         res.json(msgs);
     } catch (e) { res.json([]); }
 });
 
 module.exports = app;
 
-// تشغيل السيرفر محلياً للتجربة
 if (process.env.NODE_ENV !== 'production') {
-    app.listen(3000, () => console.log(`🚀 Server running on: http://localhost:3000`));
+    app.listen(3000, () => console.log(`🚀 Server ready on http://localhost:3000`));
 }
