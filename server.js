@@ -10,11 +10,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- 1. الربط الحديدي بالداتابيز (ضد الـ Timeout) ---
 const MONGO_URI = process.env.MONGO_URI;
 
-// إعدادات الاتصال المتقدمة
 const dbOptions = {
-    serverSelectionTimeoutMS: 10000, // يصبر 10 ثواني قبل ما يقول Timeout
-    socketTimeoutMS: 45000,          // يحافظ على القناة مفتوحة
-    family: 4                        // يجبره يستخدم IPv4 عشان السرعة في Vercel
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+    family: 4
 };
 
 const connectDB = async () => {
@@ -23,14 +22,13 @@ const connectDB = async () => {
         console.log("✅ MongoDB Cloud Connected & Ready!");
     } catch (err) {
         console.error("❌ Connection failed, retrying...", err.message);
-        // لو فشل يحاول تاني بعد 5 ثواني بدل ما السيرفر يقع
         setTimeout(connectDB, 5000);
     }
 };
 
 connectDB();
 
-// --- 2. تعريف الجداول (Schemas) ---
+// --- 2. تعريف الجداول ---
 const User = mongoose.model('User', new mongoose.Schema({
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
@@ -53,7 +51,7 @@ function hashPassword(p) {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// تسجيل مستخدم جديد (Register) - النسخة المستقرة
+// أ- تسجيل مستخدم جديد
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
@@ -68,43 +66,59 @@ app.post('/register', async (req, res) => {
         await newUser.save();
         res.status(201).json({ message: "Registered Successfully", username: newUser.username });
     } catch (e) {
-        console.error("❌ Error in Register:", e.message);
         if (e.code === 11000) return res.status(400).json({ error: "الاسم ده محجوز" });
         res.status(500).json({ error: "خطأ في الداتابيز: " + e.message });
     }
 });
 
-// تسجيل الدخول (Login)
+// ب- تسجيل الدخول (تمت الإضافة والتعديل هنا 🔓)
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await User.findOne({ 
-            username: username.toLowerCase().trim(), 
-            password: hashPassword(password) 
-        });
+        
+        if (!username || !password) {
+            return res.status(400).json({ error: "يرجى إدخال اليوزر والباسورد" });
+        }
 
-        if (!user) return res.status(401).json({ error: "بيانات غلط" });
+        const cleanUser = username.toLowerCase().trim();
+        const hashedPass = hashPassword(password);
 
+        // البحث عن المستخدم بمطابقة الاسم والباسورد المشفر
+        const user = await User.findOne({ username: cleanUser, password: hashedPass });
+
+        if (!user) {
+            return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
+        }
+
+        // تحديث آخر ظهور للمستخدم (أونلاين)
         user.lastSeen = Date.now();
         await user.save();
-        res.json({ username: user.username, publicKey: user.publicKey });
-    } catch (e) { res.status(500).json({ error: "خطأ في الاتصال بالسيرفر" }); }
+
+        console.log(`👤 User Logged In: ${cleanUser}`);
+        res.json({ 
+            message: "Success", 
+            username: user.username, 
+            publicKey: user.publicKey 
+        });
+
+    } catch (e) {
+        console.error("❌ Login Error:", e.message);
+        res.status(500).json({ error: "مشكلة فنية في تسجيل الدخول: " + e.message });
+    }
 });
 
-// إعادة تعيين الباسورد (Reset Password) - شغالة 100%
+// ج- باقي الروابط (Reset Password, Users, Send, Messages) بنفس الترتيب...
 app.post('/reset-password', async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await User.findOne({ username: username.toLowerCase().trim() });
         if (!user) return res.status(404).json({ error: "اليوزر مش موجود" });
-
         user.password = hashPassword(password);
         await user.save();
         res.json({ message: "تم تحديث الباسورد بنجاح" });
     } catch (e) { res.status(500).json({ error: "فشل التحديث: " + e.message }); }
 });
 
-// جلب اليوزرات
 app.get('/users', async (req, res) => {
     try {
         const users = await User.find({});
@@ -116,7 +130,6 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// إرسال رسائل
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
@@ -129,7 +142,6 @@ app.post('/send', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "فشل الإرسال" }); }
 });
 
-// استقبال الرسائل
 app.get('/messages/:username', async (req, res) => {
     try {
         const target = req.params.username.toLowerCase().trim();
