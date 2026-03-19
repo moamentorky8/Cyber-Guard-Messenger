@@ -7,10 +7,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعدادات الربط بـ Firebase (اللينك الخاص بك) ---
+// --- 1. إعدادات الربط بـ Firebase ---
+// ملاحظة: Vercel بيقرأ الـ Credentials تلقائياً من الـ Environment Variables
 if (!admin.apps.length) {
     admin.initializeApp({
-        // Vercel بيستخدم الـ Environment Variables للتحقق من الصلاحيات تلقائياً
         credential: admin.credential.applicationDefault(), 
         databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
     });
@@ -18,12 +18,12 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
-// دالة تشفير الباسورد SHA-256 (كما هي)
+// دالة تشفير الباسورد SHA-256
 function hashPassword(p) { 
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
 
-// --- 2. المسارات (API Routes) باستخدام Firebase ---
+// --- 2. المسارات (API Routes) ---
 
 // تسجيل مستخدم جديد (Register)
 app.post('/register', async (req, res) => {
@@ -34,11 +34,9 @@ app.post('/register', async (req, res) => {
         const cleanUser = username.toLowerCase().trim();
         const userRef = db.ref("users/" + cleanUser);
 
-        // التأكد إذا كان المستخدم موجوداً
         const snapshot = await userRef.once("value");
         if (snapshot.exists()) return res.status(400).json({ error: "الاسم مسجل بالفعل" });
 
-        // حفظ البيانات في Firebase
         await userRef.set({
             username: cleanUser,
             password: hashPassword(password),
@@ -67,7 +65,6 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: "اليوزر أو الباسورد غلط" });
         }
 
-        // تحديث حالة الظهور
         await userRef.update({ lastSeen: Date.now() });
         res.json({ username: user.username, publicKey: user.publicKey });
     } catch (e) {
@@ -96,7 +93,7 @@ app.get('/users', async (req, res) => {
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
-        const msgRef = db.ref("messages").push(); // إنشاء ID تلقائي للرسالة
+        const msgRef = db.ref("messages").push(); 
         await msgRef.set({
             sender,
             receiver: receiver.toLowerCase().trim(),
@@ -112,14 +109,16 @@ app.get('/messages/:username', async (req, res) => {
         const target = req.params.username.toLowerCase().trim();
         const msgRef = db.ref("messages");
         
-        // جلب الرسائل الموجهة لهذا المستخدم
         const snapshot = await msgRef.orderByChild("receiver").equalTo(target).once("value");
         const msgsData = snapshot.val() || {};
         
-        // تحويل الكائن لمصفوفة وحذفها بعد القراءة (كما في الكود الأصلي)
-        const msgsList = Object.keys(msgsData).map(key => msgsData[key]);
-        if (Object.keys(msgsData).length > 0) {
-            await msgRef.set(null); // مسح الرسايل بعد الاستلام (تأكد من هذا المنطق لمشروعك)
+        const msgsList = Object.values(msgsData);
+        
+        // مسح الرسائل بعد القراءة لضمان الخصوصية (حسب منطق مشروعك)
+        if (msgsList.length > 0) {
+            const updates = {};
+            Object.keys(msgsData).forEach(key => { updates[key] = null; });
+            await msgRef.update(updates);
         }
         
         res.json(msgsList);
