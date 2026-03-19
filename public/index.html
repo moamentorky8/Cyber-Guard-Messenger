@@ -59,7 +59,7 @@
                 <div class="flex flex-col gap-4 text-center mt-6">
                     <button onclick="toggleAuth()" id="toggle-text" class="text-xs font-bold text-slate-500 hover:text-cyber transition uppercase">Switch to Login</button>
                     <hr class="border-slate-200 dark:border-slate-800">
-                    <button onclick="handleReset()" class="text-[10px] font-bold text-red-500 hover:tracking-widest transition-all uppercase">Reset Identity Credentials</button>
+                    <button onclick="handleReset()" class="text-[10px] font-bold text-red-500 hover:tracking-widest transition-all uppercase">Reset Identity Passcode</button>
                 </div>
             </div>
         </div>
@@ -67,12 +67,9 @@
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
             <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Active Nodes</h3>
-                
                 <input type="text" id="searchInput" onkeyup="loadUsers()" placeholder="Search Agent..." 
                        class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition">
-
                 <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2"></div>
-                
                 <button onclick="location.reload()" class="mt-4 w-full p-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-[10px] uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
             </div>
 
@@ -84,9 +81,7 @@
                         <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Secure Tunnel Offline</p>
                     </div>
                 </div>
-
                 <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-50/50 dark:bg-transparent"></div>
-
                 <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3 items-center">
                     <input type="text" id="msg-input" placeholder="Type a secure message..." class="flex-1 bg-slate-100 dark:bg-slate-950 border-none rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-cyber">
                     <button onclick="sendMessage()" class="bg-cyber hover:scale-110 p-4 rounded-2xl text-white shadow-xl transition-all active:scale-90">
@@ -102,7 +97,6 @@
     <script>
         let isLogin = false, currentUser = null, targetUser = null;
 
-        // توليد مفاتيح الـ RSA فور فتح الصفحة
         const pki = forge.pki;
         const keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
@@ -132,10 +126,7 @@
 
             const endpoint = isLogin ? '/login' : '/register';
             const payload = { username: user, password: pass };
-
-            if (!isLogin) {
-                payload.publicKey = myPubKeyPem; // إرسال المفتاح الخام للسيرفر
-            }
+            if (!isLogin) payload.publicKey = myPubKeyPem;
 
             try {
                 const res = await fetch(endpoint, { 
@@ -143,9 +134,7 @@
                     headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify(payload) 
                 });
-
                 const data = await res.json();
-
                 if (res.ok) {
                     currentUser = data;
                     alert(isLogin ? "Access Authorized! 🔓" : "Agent Registered! 🛡️");
@@ -153,14 +142,25 @@
                 } else {
                     alert("Security Denied: " + (data.error || "Unknown Error"));
                 }
-            } catch (e) { 
-                alert("Server Connection Failed. Check your Internet."); 
-            }
+            } catch (e) { alert("Server Connection Failed."); }
         }
 
+        // دالة إعادة التعيين - تم ربطها بطلب POST للسيرفر
         async function handleReset() {
-            alert("Security Note: Resetting credentials from client-side clears local keys. For DB reset, contact Administrator.");
-            location.reload();
+            const user = prompt("Enter Agent Username to Reset:");
+            const newPass = prompt("Enter New Passcode:");
+            if(!user || !newPass) return;
+
+            try {
+                const res = await fetch('/reset-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: user.toLowerCase().trim(), password: newPass })
+                });
+                const data = await res.json();
+                if(res.ok) alert("Identity Credentials Updated. Try Logging in now.");
+                else alert("Error: " + data.error);
+            } catch (e) { alert("Reset Failed. Server unreachable."); }
         }
 
         function startChat() {
@@ -168,7 +168,6 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = currentUser.username;
-            
             loadUsers();
             setInterval(syncSystem, 3000);
         }
@@ -178,18 +177,15 @@
             try {
                 const res = await fetch(`/users?search=${searchVal}`);
                 const data = await res.json();
-                
                 document.getElementById('user-list').innerHTML = data.map(u => {
                     if(u.username === currentUser.username) return '';
                     const isOnline = u.status === 'online';
-                    const statusColor = isOnline ? 'bg-green-500 online-pulse' : 'bg-slate-500';
-                    
                     return `
                     <div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" 
                          class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group">
                         <div class="relative">
                             <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs uppercase">${u.username[0]}</div>
-                            <div class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-50 dark:border-[#020617] ${statusColor}"></div>
+                            <div class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-50 dark:border-[#020617] ${isOnline ? 'bg-green-500 online-pulse' : 'bg-slate-500'}"></div>
                         </div>
                         <div class="flex-1">
                             <p class="font-bold text-xs uppercase tracking-tight">${u.username}</p>
@@ -197,7 +193,7 @@
                         </div>
                     </div>`;
                 }).join('');
-            } catch (e) { console.error("User Load Error"); }
+            } catch (e) { }
         }
 
         function setTarget(name, pubKey) {
@@ -215,42 +211,40 @@
             if(!text) return;
 
             try {
-                // تشفير الرسالة باستخدام مفتاح الطرف الآخر
-                const pubKey = pki.publicKeyFromPem(targetUser.publicKey);
+                // تنظيف وتشفير الرسالة
+                const cleanKey = targetUser.publicKey.trim();
+                const pubKey = pki.publicKeyFromPem(cleanKey);
                 const encrypted = forge.util.encode64(pubKey.encrypt(text));
 
-                await fetch('/send', { 
+                const res = await fetch('/send', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify({ sender: currentUser.username, receiver: targetUser.username, message: encrypted }) 
                 });
-                
-                const area = document.getElementById('msg-area');
-                area.innerHTML += `
-                    <div class="flex justify-end animate-fade-in">
-                        <div class="bg-cyber text-white p-4 rounded-2xl rounded-tr-none max-w-[70%] shadow-lg shadow-cyber/20">
-                            <p class="text-sm font-medium">${text}</p>
-                            <p class="text-[7px] mt-1 opacity-70 uppercase font-black">Encrypted & Transmitted</p>
-                        </div>
-                    </div>`;
-                input.value = '';
-                area.scrollTop = area.scrollHeight;
-            } catch (e) { 
-                alert("Encryption Error: فشل في تأمين الرسالة."); 
-            }
+
+                if(res.ok) {
+                    const area = document.getElementById('msg-area');
+                    area.innerHTML += `
+                        <div class="flex justify-end animate-fade-in">
+                            <div class="bg-cyber text-white p-4 rounded-2xl rounded-tr-none max-w-[70%] shadow-lg shadow-cyber/20">
+                                <p class="text-sm font-medium">${text}</p>
+                                <p class="text-[7px] mt-1 opacity-70 uppercase font-black">Encrypted & Transmitted</p>
+                            </div>
+                        </div>`;
+                    input.value = '';
+                    area.scrollTop = area.scrollHeight;
+                }
+            } catch (e) { alert("Encryption Error: فشل في تأمين الرسالة. تأكد من صحة مفتاح الطرف الآخر."); }
         }
 
         async function syncSystem() {
             if(!currentUser) return;
-
             try {
                 const res = await fetch(`/messages/${currentUser.username}`);
                 const msgs = await res.json();
                 const area = document.getElementById('msg-area');
-
                 msgs.forEach(m => {
                     try {
-                        // فك تشفير الرسالة القادمة بمفتاحي الخاص
                         const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
                         area.innerHTML += `
                             <div class="flex justify-start animate-fade-in">
@@ -261,10 +255,9 @@
                                 </div>
                             </div>`;
                         area.scrollTop = area.scrollHeight;
-                    } catch (e) { console.log("Incoming data is ciphered."); }
+                    } catch (e) { }
                 });
             } catch (e) { }
-
             if(document.getElementById('searchInput').value === "") loadUsers();
         }
     </script>
