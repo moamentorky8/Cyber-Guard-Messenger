@@ -15,7 +15,9 @@ if (!admin.apps.length) {
         // التحقق: هل نحن على Vercel (Cloud) أم Localhost؟
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
             // القراءة من الـ Environment Variables (للأمان على Vercel)
-            serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            // استخدمنا .trim() لضمان عدم وجود مسافات مخفية تعطل الـ JSON.parse
+            const configText = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+            serviceAccount = JSON.parse(configText);
             console.log("☁️ Mode: Cloud Connection (Vercel Environment)");
         } else {
             // القراءة من ملف الـ JSON المحلي (للمناقشة بكرة في الكلية)
