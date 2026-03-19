@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. الربط الآمن بالسحابة (عن طريق Vercel Environment Variables) ---
+// --- 1. الربط الآمن بالسحابة ---
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     publicKey: { type: String, default: "" },
     lastSeen: { type: Date, default: Date.now }
-}, { strict: false }); // لضمان مرونة البيانات
+}, { strict: false });
 
 const User = mongoose.model('User', userSchema);
 
@@ -37,7 +37,7 @@ const messageSchema = new mongoose.Schema({
 
 const Message = mongoose.model('Message', messageSchema);
 
-// دالة التشفير الموحدة (SHA-256) - دي سر نجاح اللوج إن
+// دالة التشفير الموحدة (SHA-256)
 function hashPassword(p) { 
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
@@ -59,46 +59,49 @@ app.post('/register', async (req, res) => {
         });
 
         await newUser.save();
-        console.log(`👤 New Agent Registered: ${username}`);
         res.status(201).json({ message: "Registered Successfully", username: newUser.username });
     } catch (e) {
-        console.error("Register Error:", e.message);
         if (e.code === 11000) return res.status(400).json({ error: "الاسم ده محجوز لعميل تاني!" });
         res.status(500).json({ error: "مشكلة في الداتابيز: " + e.message });
     }
 });
 
-// تسجيل الدخول (النسخة الذكية) 🔓
+// تسجيل الدخول 🔓
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        if (!username || !password) return res.status(400).json({ error: "ادخل البيانات كاملة" });
-
         const cleanUser = username.toLowerCase().trim();
         const hashedPass = hashPassword(password);
 
-        // البحث عن اليوزر ومطابقة الباسوورد المتشفر
-        const user = await User.findOne({ 
-            username: cleanUser, 
-            password: hashedPass 
-        });
+        const user = await User.findOne({ username: cleanUser, password: hashedPass });
 
-        if (!user) {
-            return res.status(401).json({ error: "بيانات غلط (تأكد من اليوزر والباسوورد)" });
-        }
+        if (!user) return res.status(401).json({ error: "بيانات غلط (تأكد من اليوزر والباسوورد)" });
 
-        // تحديث حالة الظهور
         user.lastSeen = Date.now();
         await user.save();
         
-        console.log(`✅ Agent Authorized: ${cleanUser}`);
-        res.json({ 
-            username: user.username, 
-            publicKey: user.publicKey 
-        });
+        res.json({ username: user.username, publicKey: user.publicKey });
+    } catch (e) { res.status(500).json({ error: "مشكلة فنية في السيرفر" }); }
+});
+
+// --- إضافة جديدة: إعادة تعيين كلمة المرور 🔑 ---
+app.post('/reset-password', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة" });
+
+        const cleanUser = username.toLowerCase().trim();
+        const user = await User.findOne({ username: cleanUser });
+
+        if (!user) return res.status(404).json({ error: "العميل غير موجود في النظام" });
+
+        user.password = hashPassword(password);
+        await user.save();
+
+        console.log(`🔑 Password Reset for: ${cleanUser}`);
+        res.json({ message: "Password updated successfully" });
     } catch (e) {
-        console.error("Login Error:", e.message);
-        res.status(500).json({ error: "مشكلة فنية في السيرفر" });
+        res.status(500).json({ error: "فشل تحديث كلمة المرور: " + e.message });
     }
 });
 
@@ -130,14 +133,16 @@ app.post('/send', async (req, res) => {
 // استقبال الرسائل
 app.get('/messages/:username', async (req, res) => {
     try {
-        const msgs = await Message.find({ 
-            receiver: req.params.username.toLowerCase().trim() 
-        });
+        const target = req.params.username.toLowerCase().trim();
+        const msgs = await Message.find({ receiver: target });
         res.json(msgs);
-        // مسح الرسائل بعد استلامها (اختياري لزيادة الأمان)
-        // await Message.deleteMany({ receiver: req.params.username.toLowerCase().trim() });
+        
+        // مسح الرسائل بعد الاستلام (اختياري لزيادة الأمان)
+        if (msgs.length > 0) {
+            await Message.deleteMany({ receiver: target });
+        }
     } catch (e) { res.json([]); }
-} );
+});
 
 module.exports = app;
 
