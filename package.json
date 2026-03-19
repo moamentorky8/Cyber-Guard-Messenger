@@ -14,7 +14,7 @@
     "path": "^0.12.7"
   },
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   },
   "author": "Moamen Abdelfattah",
   "license": "ISC"
