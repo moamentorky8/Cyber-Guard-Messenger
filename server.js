@@ -7,22 +7,26 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعدادات الربط بـ Firebase (النسخة الذكية والمؤمنة) ---
+// --- 1. إعدادات الربط بـ Firebase (النسخة الصخرية النهائية) ---
 if (!admin.apps.length) {
     try {
         let serviceAccount;
 
-        // التحقق: هل نحن على Vercel (Cloud) أم Localhost؟
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-            // القراءة من الـ Environment Variables (للأمان على Vercel)
-            // استخدمنا .trim() لضمان عدم وجود مسافات مخفية تعطل الـ JSON.parse
-            const configText = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-            serviceAccount = JSON.parse(configText);
-            console.log("☁️ Mode: Cloud Connection (Vercel Environment)");
+            // معالجة ذكية للـ JSON من Environment Variables
+            // بنشيل أي مسافات وبنصلح السطور الجديدة في الـ Private Key
+            const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+            serviceAccount = JSON.parse(rawJson);
+            
+            // تصحيح ضروري جداً لمفتاح جوجل السري في بيئة السحاب
+            if (serviceAccount.private_key) {
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+            }
+            console.log("☁️ Connected via Vercel Secrets");
         } else {
-            // القراءة من ملف الـ JSON المحلي (للمناقشة بكرة في الكلية)
+            // الربط المحلي (بكرة في الكلية)
             serviceAccount = require("./serviceAccountKey.json");
-            console.log("✅ Mode: Local Connection (Using Service Account Key)");
+            console.log("✅ Connected via Local JSON File");
         }
 
         admin.initializeApp({
@@ -30,8 +34,8 @@ if (!admin.apps.length) {
             databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
         });
     } catch (e) {
-        console.error("❌ Firebase Auth Error:", e.message);
-        // محاولة أخيرة للربط الافتراضي في حالة فشل ما سبق
+        console.error("❌ Firebase Initialization Failed:", e.message);
+        // منع السيرفر من الانهيار
         if (!admin.apps.length) {
             admin.initializeApp({
                 credential: admin.credential.applicationDefault(),
@@ -72,7 +76,7 @@ app.post('/register', async (req, res) => {
         res.status(201).json({ message: "Success", username: cleanUser });
     } catch (e) {
         console.error("Register Error:", e);
-        res.status(500).json({ error: "خطأ في السيرفر السحابي: " + e.message });
+        res.status(500).json({ error: "خطأ في السيرفر: " + e.message });
     }
 });
 
@@ -97,7 +101,7 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// قائمة المستخدمين النشطين
+// قائمة المستخدمين
 app.get('/users', async (req, res) => {
     try {
         const usersRef = db.ref("users");
@@ -129,7 +133,7 @@ app.post('/send', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
 });
 
-// استقبال الرسائل وحذفها (Ephemeral Messaging)
+// استقبال الرسائل وحذفها بعد القراءة (لأغراض الخصوصية)
 app.get('/messages/:username', async (req, res) => {
     try {
         const target = req.params.username.toLowerCase().trim();
@@ -155,5 +159,5 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 module.exports = app;
 
 if (process.env.NODE_ENV !== 'production') {
-    app.listen(3000, () => console.log(`🚀 Final Stable Server Running: http://localhost:3000`));
+    app.listen(3000, () => console.log(`🚀 Server Running on http://localhost:3000`));
 }
