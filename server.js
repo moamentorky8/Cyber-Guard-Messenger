@@ -46,13 +46,11 @@ function hashPassword(p) {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// تسجيل مستخدم جديد 🚀
-// تسجيل مستخدم جديد 🚀 (النسخة اللي بتطبع الإيرور بالتفصيل)
+// تسجيل مستخدم جديد 🚀 (تم دمجها وتنظيفها من التكرار)
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
         
-        // لوجز عشان نشوف المشكلة في Vercel
         console.log("📝 محاولة تسجيل يوزر جديد:", username);
 
         if (!username || !password) {
@@ -70,16 +68,10 @@ app.post('/register', async (req, res) => {
         res.status(201).json({ message: "Registered Successfully", username: newUser.username });
     } catch (e) {
         console.error("❌ Database Save Error:", e.message); 
-        // هنا السيرفر هيبعتلك السبب الحقيقي في الـ Alert
+        if (e.code === 11000) {
+            return res.status(400).json({ error: "الاسم ده محجوز لعميل تاني!" });
+        }
         res.status(500).json({ error: "خطأ في الداتابيز: " + e.message });
-    }
-});
-
-        await newUser.save();
-        res.status(201).json({ message: "Registered Successfully", username: newUser.username });
-    } catch (e) {
-        if (e.code === 11000) return res.status(400).json({ error: "الاسم ده محجوز لعميل تاني!" });
-        res.status(500).json({ error: "مشكلة في الداتابيز: " + e.message });
     }
 });
 
@@ -101,7 +93,7 @@ app.post('/login', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "مشكلة فنية في السيرفر" }); }
 });
 
-// --- إضافة جديدة: إعادة تعيين كلمة المرور 🔑 ---
+// إعادة تعيين كلمة المرور 🔑
 app.post('/reset-password', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -154,7 +146,6 @@ app.get('/messages/:username', async (req, res) => {
         const msgs = await Message.find({ receiver: target });
         res.json(msgs);
         
-        // مسح الرسائل بعد الاستلام (اختياري لزيادة الأمان)
         if (msgs.length > 0) {
             await Message.deleteMany({ receiver: target });
         }
