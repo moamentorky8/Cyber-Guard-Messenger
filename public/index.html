@@ -100,8 +100,9 @@
     </main>
 
     <script>
-        let isLogin = false, currentUser = null, myKeys = null, targetUser = null;
+        let isLogin = false, currentUser = null, targetUser = null;
 
+        // توليد مفاتيح الـ RSA فور فتح الصفحة
         const pki = forge.pki;
         const keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
@@ -122,12 +123,19 @@
         }
 
         async function handleAuth() {
-            const user = document.getElementById('username').value, pass = document.getElementById('password').value;
+            const userField = document.getElementById('username');
+            const passField = document.getElementById('password');
+            const user = userField.value.trim().toLowerCase(); 
+            const pass = passField.value.trim();
+
             if(!user || !pass) return alert("System Error: Credentials Missing");
 
             const endpoint = isLogin ? '/login' : '/register';
-            // الحل النهائي: تشفير المفتاح العام بـ Base64 لضمان وصوله سليم 100% للسيرفر
-            const payload = isLogin ? { username: user, password: pass } : { username: user, password: pass, publicKey: btoa(myPubKeyPem) };
+            const payload = { username: user, password: pass };
+
+            if (!isLogin) {
+                payload.publicKey = myPubKeyPem; // إرسال المفتاح الخام للسيرفر
+            }
 
             try {
                 const res = await fetch(endpoint, { 
@@ -136,29 +144,23 @@
                     body: JSON.stringify(payload) 
                 });
 
+                const data = await res.json();
+
                 if (res.ok) {
-                    currentUser = await res.json();
+                    currentUser = data;
+                    alert(isLogin ? "Access Authorized! 🔓" : "Agent Registered! 🛡️");
                     startChat();
                 } else {
-                    const err = await res.json();
-                    alert(err.error || "Access Denied.");
+                    alert("Security Denied: " + (data.error || "Unknown Error"));
                 }
-            } catch (e) { alert("Server Connection Failed."); }
+            } catch (e) { 
+                alert("Server Connection Failed. Check your Internet."); 
+            }
         }
 
         async function handleReset() {
-            const user = prompt("Enter Username to Reset:");
-            const newPass = prompt("Enter New Passcode:");
-            if(!user || !newPass) return;
-            try {
-                const res = await fetch('/reset-password', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ username: user, password: newPass })
-                });
-                if(res.ok) alert("Identity Credentials Updated.");
-                else alert("Error: User Not Found.");
-            } catch (e) { alert("Reset Failed."); }
+            alert("Security Note: Resetting credentials from client-side clears local keys. For DB reset, contact Administrator.");
+            location.reload();
         }
 
         function startChat() {
@@ -182,9 +184,8 @@
                     const isOnline = u.status === 'online';
                     const statusColor = isOnline ? 'bg-green-500 online-pulse' : 'bg-slate-500';
                     
-                    // هنا نمرر المفتاح كما هو (الذي هو الآن Base64)
                     return `
-                    <div onclick="setTarget('${u.username}', '${u.publicKey}')" 
+                    <div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" 
                          class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group">
                         <div class="relative">
                             <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs uppercase">${u.username[0]}</div>
@@ -199,25 +200,13 @@
             } catch (e) { console.error("User Load Error"); }
         }
 
-        // تم تغيير الفانكشن لتفك تشفير المفتاح قبل استخدامه
-        function setTarget(name, pubKeyB64) {
-            try {
-                // فك الـ Base64 ليرجع المفتاح لصيغته الأصلية PEM
-                const decodedKey = atob(pubKeyB64);
-                targetUser = { 
-                    username: name, 
-                    publicKey: decodedKey.trim() 
-                };
-                document.getElementById('current-chat-name').innerText = name;
-                document.getElementById('target-avatar').innerText = name[0].toUpperCase();
-                document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
-                document.getElementById('chat-status').classList.remove('text-slate-500');
-                document.getElementById('chat-status').classList.add('text-cyber');
-                document.getElementById('msg-area').innerHTML = '';
-            } catch (e) {
-                console.error("Key Decode Error", e);
-                alert("Key Sync Error: فشل في معالجة مفتاح الطرف الآخر.");
-            }
+        function setTarget(name, pubKey) {
+            targetUser = { username: name, publicKey: pubKey.trim() };
+            document.getElementById('current-chat-name').innerText = name;
+            document.getElementById('target-avatar').innerText = name[0].toUpperCase();
+            document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
+            document.getElementById('chat-status').className = "text-[9px] uppercase font-bold tracking-tighter text-cyber";
+            document.getElementById('msg-area').innerHTML = '';
         }
 
         async function sendMessage() {
@@ -226,6 +215,7 @@
             if(!text) return;
 
             try {
+                // تشفير الرسالة باستخدام مفتاح الطرف الآخر
                 const pubKey = pki.publicKeyFromPem(targetUser.publicKey);
                 const encrypted = forge.util.encode64(pubKey.encrypt(text));
 
@@ -246,19 +236,12 @@
                 input.value = '';
                 area.scrollTop = area.scrollHeight;
             } catch (e) { 
-                console.error("RSA Encryption detail:", e);
-                alert("Encryption Error: فشل في تأمين الرسالة. تأكد من توافق مفاتيح الطرف الآخر."); 
+                alert("Encryption Error: فشل في تأمين الرسالة."); 
             }
         }
 
         async function syncSystem() {
             if(!currentUser) return;
-
-            fetch('/heartbeat', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ username: currentUser.username }) 
-            });
 
             try {
                 const res = await fetch(`/messages/${currentUser.username}`);
@@ -267,6 +250,7 @@
 
                 msgs.forEach(m => {
                     try {
+                        // فك تشفير الرسالة القادمة بمفتاحي الخاص
                         const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
                         area.innerHTML += `
                             <div class="flex justify-start animate-fade-in">
@@ -277,7 +261,7 @@
                                 </div>
                             </div>`;
                         area.scrollTop = area.scrollHeight;
-                    } catch (e) { console.log("Decrypt Error: Possible Key Mismatch"); }
+                    } catch (e) { console.log("Incoming data is ciphered."); }
                 });
             } catch (e) { }
 
