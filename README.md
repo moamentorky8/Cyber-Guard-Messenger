@@ -1,48 +1,26 @@
-# نظام المراسلة الآمن (Secure Messenger Pro) 🔐
-**مشروع مادة أمن المعلومات (Security Two) - جامعة برج العرب التكنولوجية**
+# 🛡️ Cyber Messenger | Secure RSA Messaging Terminal
+**Developed by: Moamen Abdelfattah**
 
-## 👤 إعداد الطالب
-**مؤمن** - الفرقة الأولى
+## 📖 Overview
+Cyber Messenger is a high-security, cloud-native communication platform designed with a **Zero-Trust Architecture**. It ensures total privacy through end-to-end encryption, meaning only the intended recipient can decrypt and read the messages.
 
----
+## 🔒 Security Features
+* **Asynchronous RSA Encryption:** Utilizes 1024-bit RSA key pairs. The Private Key never leaves the user's device.
+* **SHA-256 Password Hashing:** Credentials are securely hashed before being stored in the cloud.
+* **Ephemeral Data:** Messages are automatically purged from the server after delivery to ensure data volatility.
 
-## 📝 وصف المشروع
-تطبيق ويب للمراسلة الفورية يركز على مبدأ "الأمان بالتصميم" (Security by Design). يتيح النظام للمستخدمين التواصل عبر قنوات مشفرة تماماً تضمن سرية البيانات وخصوصية الهوية.
+## 🛠️ Tech Stack
+* **Frontend:** HTML5, Tailwind CSS, JavaScript (Vanilla).
+* **Backend:** Node.js, Express.js.
+* **Database:** Firebase Realtime Database (Google Cloud).
+* **Deployment:** Vercel (Serverless Functions).
+* **Cryptography:** Node-Forge.
 
-## 🛠 التقنيات والمبادئ الأمنية المستخدمة
-
-### 1. تشفير كلمات المرور (Hashing - SHA-256)
-* لا يتم تخزين كلمات المرور كنصوص صريحة.
-* يتم استخدام خوارزمية **SHA-256** لتحويل كلمة المرور إلى بصمة رقمية فريدة.
-* هذا يحمي المستخدمين حتى في حالة وصول المتسللين إلى قاعدة البيانات.
-
-### 2. التشفير غير المتماثل (Asymmetric Encryption - RSA)
-* يعتمد النظام على توليد زوج من المفاتيح لكل مستخدم: **مفتاح عام (Public Key)** و **مفتاح خاص (Private Key)**.
-* يتم تشفير الرسالة باستخدام المفتاح العام للمستلم، ولا يمكن فكها إلا باستخدام مفتاحه الخاص.
-* **ملاحظة أمنية:** المفتاح الخاص يُخزن محلياً في متصفح المستخدم (Local Storage) ولا يُرسل أبداً للسيرفر.
-
-### 3. تقنيات التطوير
-* **Backend:** Node.js & Express.
-* **Database:** SQLite (Relational Database).
-* **Frontend:** HTML5, Tailwind CSS (Modern UI), Forge.js (Cryptography Library).
+## 🚀 How it Works
+1. **Key Generation:** Upon registration, the browser generates a unique RSA Key Pair.
+2. **Key Exchange:** The Public Key is sent to Firebase, while the Private Key stays in LocalStorage.
+3. **Encryption:** When Agent A sends a message to Agent B, the message is encrypted using Agent B's Public Key.
+4. **Decryption:** Agent B receives the "Cyphertext" and uses their local Private Key to decrypt it.
 
 ---
-
-## 🚀 كيفية التشغيل
-1.  تأكد من تثبيت **Node.js** على جهازك.
-2.  قم بتثبيت المكتبات اللازمة عبر التيرمنال:
-    ```bash
-    npm install express sqlite3
-    ```
-3.  شغل السيرفر:
-    ```bash
-    node server.js
-    ```
-4.  افتح المتصفح على الرابط: `http://localhost:3000`
-
----
-
-## 📸 لقطات من النظام
-* واجهة تسجيل دخول وخروج بأسلوب **Glassmorphism**.
-* نظام إعادة تعيين كلمة المرور المشفر.
-* غرف دردشة حية مع فك تشفير فوري للرسائل المستلمة.
+*This project was developed for academic purposes to demonstrate advanced cryptographic integration in modern web applications.*
