@@ -97,7 +97,7 @@
         let isLogin = false, currentUser = null, targetUser = null;
         const pki = forge.pki;
 
-        // توليد مفاتيح الـ RSA فور فتح الصفحة
+        // Key Generation
         const keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
         const myPrivKey = keypair.privateKey;
@@ -117,10 +117,8 @@
         }
 
         async function handleAuth() {
-            const userField = document.getElementById('username');
-            const passField = document.getElementById('password');
-            const user = userField.value.trim().toLowerCase(); 
-            const pass = passField.value.trim();
+            const user = document.getElementById('username').value.trim().toLowerCase();
+            const pass = document.getElementById('password').value.trim();
 
             if(!user || !pass) return alert("System Error: Credentials Missing");
 
@@ -129,10 +127,10 @@
             if (!isLogin) payload.publicKey = myPubKeyPem;
 
             try {
-                const res = await fetch(endpoint, { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify(payload) 
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 if (res.ok) {
@@ -171,11 +169,8 @@
             document.getElementById('active-user').innerText = currentUser.username;
             loadUsers();
             
-            // --- تعديل السرعة اللحظية ---
-            // تحديث الرسائل كل ثانية واحدة لسرعة قصوى
+            // 🔥 السرعة اللحظية هنا
             setInterval(syncSystem, 1000); 
-            
-            // تحديث قائمة المستخدمين كل 5 ثواني للحفاظ على الأداء
             setInterval(() => {
                 if(document.getElementById('searchInput').value === "") loadUsers();
             }, 5000);
@@ -220,18 +215,13 @@
             if(!text) return;
 
             try {
-                const cleanKey = targetUser.publicKey.trim();
-                const pubKeyObj = pki.publicKeyFromPem(cleanKey);
+                const pubKeyObj = pki.publicKeyFromPem(targetUser.publicKey.trim());
                 const encrypted = forge.util.encode64(pubKeyObj.encrypt(text));
 
                 const res = await fetch('/send', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ 
-                        sender: currentUser.username, 
-                        receiver: targetUser.username, 
-                        message: encrypted 
-                    }) 
+                    body: JSON.stringify({ sender: currentUser.username, receiver: targetUser.username, message: encrypted }) 
                 });
 
                 if(res.ok) {
@@ -246,10 +236,7 @@
                     input.value = '';
                     area.scrollTop = area.scrollHeight;
                 }
-            } catch (e) { 
-                console.error(e);
-                alert("Encryption Error: فشل في تأمين الرسالة."); 
-            }
+            } catch (e) { alert("Encryption Error!"); }
         }
 
         async function syncSystem() {
@@ -258,7 +245,6 @@
                 const res = await fetch(`/messages/${currentUser.username}`);
                 const msgs = await res.json();
                 const area = document.getElementById('msg-area');
-                
                 if (msgs && msgs.length > 0) {
                     msgs.forEach(m => {
                         try {
@@ -272,7 +258,7 @@
                                     </div>
                                 </div>`;
                             area.scrollTop = area.scrollHeight;
-                        } catch (e) { console.log("Incoming ciphered data"); }
+                        } catch (e) { console.log("Incoming cipher"); }
                     });
                 }
             } catch (e) { }
