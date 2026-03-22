@@ -124,7 +124,6 @@
 
             if(!user || !pass) return alert("System Error: Credentials Missing");
 
-            // الربط بفايربيز عبر السيرفر الخاص بك
             const endpoint = isLogin ? '/login' : '/register';
             const payload = { username: user, password: pass };
             if (!isLogin) payload.publicKey = myPubKeyPem;
@@ -171,7 +170,15 @@
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = currentUser.username;
             loadUsers();
-            setInterval(syncSystem, 3000);
+            
+            // --- تعديل السرعة اللحظية ---
+            // تحديث الرسائل كل ثانية واحدة لسرعة قصوى
+            setInterval(syncSystem, 1000); 
+            
+            // تحديث قائمة المستخدمين كل 5 ثواني للحفاظ على الأداء
+            setInterval(() => {
+                if(document.getElementById('searchInput').value === "") loadUsers();
+            }, 5000);
         }
 
         async function loadUsers() {
@@ -251,22 +258,24 @@
                 const res = await fetch(`/messages/${currentUser.username}`);
                 const msgs = await res.json();
                 const area = document.getElementById('msg-area');
-                msgs.forEach(m => {
-                    try {
-                        const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
-                        area.innerHTML += `
-                            <div class="flex justify-start animate-fade-in">
-                                <div class="glass p-4 rounded-2xl rounded-tl-none max-w-[70%] shadow-sm text-left">
-                                    <p class="text-[9px] text-cyber font-black uppercase mb-1">${m.sender}</p>
-                                    <p class="text-sm font-medium">${decrypted}</p>
-                                    <p class="text-[7px] mt-1 text-cyber uppercase font-black">Decrypted RSA Payload</p>
-                                </div>
-                            </div>`;
-                        area.scrollTop = area.scrollHeight;
-                    } catch (e) { console.log("Incoming ciphered data"); }
-                });
+                
+                if (msgs && msgs.length > 0) {
+                    msgs.forEach(m => {
+                        try {
+                            const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
+                            area.innerHTML += `
+                                <div class="flex justify-start animate-fade-in">
+                                    <div class="glass p-4 rounded-2xl rounded-tl-none max-w-[70%] shadow-sm text-left">
+                                        <p class="text-[9px] text-cyber font-black uppercase mb-1">${m.sender}</p>
+                                        <p class="text-sm font-medium">${decrypted}</p>
+                                        <p class="text-[7px] mt-1 text-cyber uppercase font-black">Decrypted RSA Payload</p>
+                                    </div>
+                                </div>`;
+                            area.scrollTop = area.scrollHeight;
+                        } catch (e) { console.log("Incoming ciphered data"); }
+                    });
+                }
             } catch (e) { }
-            if(document.getElementById('searchInput').value === "") loadUsers();
         }
     </script>
 </body>
