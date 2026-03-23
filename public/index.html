@@ -21,6 +21,8 @@
         .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
         @keyframes pulse-green { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
         .online-pulse { animation: pulse-green 2s infinite; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen">
@@ -66,9 +68,11 @@
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
             <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Active Nodes</h3>
-                <input type="text" id="searchInput" onkeyup="loadUsers()" placeholder="Search Agent..." 
+                <input type="text" id="searchInput" onkeyup="loadUsers()" placeholder="Search Agent ID..." 
                        class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition">
-                <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2"></div>
+                <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2">
+                    <p class="text-[9px] text-center opacity-40 uppercase py-4">Search for an agent to start</p>
+                </div>
                 <button onclick="location.reload()" class="mt-4 w-full p-3 rounded-xl bg-red-500/10 text-red-500 font-bold text-[10px] uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
             </div>
 
@@ -97,7 +101,6 @@
         let isLogin = false, currentUser = null, targetUser = null;
         const pki = forge.pki;
 
-        // Key Generation
         const keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey);
         const myPrivKey = keypair.privateKey;
@@ -119,13 +122,10 @@
         async function handleAuth() {
             const user = document.getElementById('username').value.trim().toLowerCase();
             const pass = document.getElementById('password').value.trim();
-
             if(!user || !pass) return alert("System Error: Credentials Missing");
-
             const endpoint = isLogin ? '/login' : '/register';
             const payload = { username: user, password: pass };
             if (!isLogin) payload.publicKey = myPubKeyPem;
-
             try {
                 const res = await fetch(endpoint, {
                     method: 'POST',
@@ -147,7 +147,6 @@
             const user = prompt("Enter Agent Username to Reset:");
             const newPass = prompt("Enter New Passcode:");
             if(!user || !newPass) return;
-
             try {
                 const res = await fetch('/reset-password', {
                     method: 'POST',
@@ -167,26 +166,40 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = currentUser.username;
-            loadUsers();
             
-            // 🔥 السرعة اللحظية هنا
+            // تحديث الرسائل كل ثانية
             setInterval(syncSystem, 1000); 
-            setInterval(() => {
-                if(document.getElementById('searchInput').value === "") loadUsers();
-            }, 5000);
         }
 
         async function loadUsers() {
-            const searchVal = document.getElementById('searchInput').value;
+            const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
+            const userListDiv = document.getElementById('user-list');
+
+            // إخفاء القائمة لو البحث فاضي أو أقل من حرفين
+            if (searchVal.length < 2) {
+                userListDiv.innerHTML = '<p class="text-[9px] text-center opacity-40 uppercase py-4">Type at least 2 chars to search...</p>';
+                return;
+            }
+
             try {
-                const res = await fetch(`/users?search=${searchVal}`);
+                const res = await fetch(`/users`);
                 const data = await res.json();
-                document.getElementById('user-list').innerHTML = data.map(u => {
-                    if(u.username === currentUser.username) return '';
+                
+                // البحث في الداتابيز وفلترة اليوزر الحالي
+                const filtered = data.filter(u => 
+                    u.username.includes(searchVal) && u.username !== currentUser.username
+                );
+
+                if (filtered.length === 0) {
+                    userListDiv.innerHTML = '<p class="text-[9px] text-center text-red-500 uppercase py-4">No Agent Found</p>';
+                    return;
+                }
+
+                userListDiv.innerHTML = filtered.map(u => {
                     const isOnline = u.status === 'online';
                     return `
                     <div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" 
-                         class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group">
+                         class="p-4 rounded-2xl cursor-pointer transition-all flex items-center gap-3 hover:bg-cyber/10 border border-transparent hover:border-cyber/20 group animate-fade-in">
                         <div class="relative">
                             <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-xs uppercase">${u.username[0]}</div>
                             <div class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-50 dark:border-[#020617] ${isOnline ? 'bg-green-500 online-pulse' : 'bg-slate-500'}"></div>
@@ -213,17 +226,14 @@
             if(!targetUser || !targetUser.publicKey) return alert("System Warning: Select a Peer Node");
             const input = document.getElementById('msg-input'), text = input.value;
             if(!text) return;
-
             try {
                 const pubKeyObj = pki.publicKeyFromPem(targetUser.publicKey.trim());
                 const encrypted = forge.util.encode64(pubKeyObj.encrypt(text));
-
                 const res = await fetch('/send', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
                     body: JSON.stringify({ sender: currentUser.username, receiver: targetUser.username, message: encrypted }) 
                 });
-
                 if(res.ok) {
                     const area = document.getElementById('msg-area');
                     area.innerHTML += `
@@ -258,7 +268,7 @@
                                     </div>
                                 </div>`;
                             area.scrollTop = area.scrollHeight;
-                        } catch (e) { console.log("Incoming cipher"); }
+                        } catch (e) { }
                     });
                 }
             } catch (e) { }
