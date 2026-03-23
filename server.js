@@ -13,18 +13,14 @@ if (!admin.apps.length) {
         let serviceAccount;
 
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-            // معالجة ذكية للـ JSON من Environment Variables
-            // بنشيل أي مسافات وبنصلح السطور الجديدة في الـ Private Key
             const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
             serviceAccount = JSON.parse(rawJson);
             
-            // تصحيح ضروري جداً لمفتاح جوجل السري في بيئة السحاب
             if (serviceAccount.private_key) {
                 serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
             }
             console.log("☁️ Connected via Vercel Secrets");
         } else {
-            // الربط المحلي (بكرة في الكلية)
             serviceAccount = require("./serviceAccountKey.json");
             console.log("✅ Connected via Local JSON File");
         }
@@ -35,7 +31,6 @@ if (!admin.apps.length) {
         });
     } catch (e) {
         console.error("❌ Firebase Initialization Failed:", e.message);
-        // منع السيرفر من الانهيار
         if (!admin.apps.length) {
             admin.initializeApp({
                 credential: admin.credential.applicationDefault(),
@@ -47,14 +42,13 @@ if (!admin.apps.length) {
 
 const db = admin.database();
 
-// دالة تشفير الباسورد SHA-256
 function hashPassword(p) { 
     return crypto.createHash('sha256').update(p).digest('hex'); 
 }
 
 // --- 2. المسارات (API Routes) ---
 
-// تسجيل مستخدم جديد (Register)
+// تسجيل مستخدم جديد
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
@@ -75,12 +69,11 @@ app.post('/register', async (req, res) => {
 
         res.status(201).json({ message: "Success", username: cleanUser });
     } catch (e) {
-        console.error("Register Error:", e);
-        res.status(500).json({ error: "خطأ في السيرفر: " + e.message });
+        res.status(500).json({ error: "خطأ في السيرفر" });
     }
 });
 
-// تسجيل الدخول (Login)
+// تسجيل الدخول
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -118,7 +111,58 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// إرسال رسالة مشفرة
+// --- إضافة مسارات الجروبات (New Group Routes) ---
+
+// إنشاء جروب جديد
+app.post('/create-group', async (req, res) => {
+    try {
+        const { groupName, creator } = req.body;
+        const groupRef = db.ref("groups").push();
+        await groupRef.set({
+            name: groupName,
+            creator: creator,
+            createdAt: Date.now(),
+            messages: {}
+        });
+        res.json({ success: true, groupId: groupRef.key });
+    } catch (e) { res.status(500).json({ error: "فشل إنشاء الجروب" }); }
+});
+
+// جلب قائمة الجروبات
+app.get('/groups', async (req, res) => {
+    try {
+        const groupsRef = db.ref("groups");
+        const snapshot = await groupsRef.once("value");
+        res.json(snapshot.val() || {});
+    } catch (e) { res.json({}); }
+});
+
+// إرسال رسالة للجروب
+app.post('/send-group', async (req, res) => {
+    try {
+        const { groupId, sender, message } = req.body;
+        const groupMsgRef = db.ref(`groups/${groupId}/messages`).push();
+        await groupMsgRef.set({
+            sender,
+            message,
+            timestamp: Date.now()
+        });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "خطأ إرسال للجروب" }); }
+});
+
+// جلب رسائل جروب معين
+app.get('/group-messages/:groupId', async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const snapshot = await db.ref(`groups/${groupId}/messages`).once("value");
+        res.json(snapshot.val() || {});
+    } catch (e) { res.json({}); }
+});
+
+// --- نهاية مسارات الجروبات ---
+
+// إرسال رسالة مشفرة (فردي)
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
@@ -133,7 +177,7 @@ app.post('/send', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
 });
 
-// استقبال الرسائل وحذفها بعد القراءة (لأغراض الخصوصية)
+// استقبال الرسائل الخاصة
 app.get('/messages/:username', async (req, res) => {
     try {
         const target = req.params.username.toLowerCase().trim();
