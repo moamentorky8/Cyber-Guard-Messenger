@@ -36,17 +36,26 @@
         <div id="auth-section" class="max-w-md mx-auto mt-12 glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber">
             <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase italic">Security Terminal</h2>
             <div class="space-y-4">
-                <input type="text" id="username" placeholder="Agent ID / Username" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
+                <input type="text" id="username" placeholder="Login ID" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
                 <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
                 <button onclick="handleAuth()" id="btn-main" class="w-full bg-cyber text-white p-4 rounded-xl font-black uppercase text-xs shadow-lg">Authorize Access</button>
                 <button onclick="toggleAuth()" id="toggle-text" class="w-full text-xs font-bold text-slate-500 uppercase">New Identity? Register</button>
             </div>
         </div>
 
+        <div id="setup-section" class="hidden max-w-md mx-auto mt-12 glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-green-500">
+            <h2 class="text-center text-2xl font-black mb-4 uppercase text-green-500 italic">Identity Setup</h2>
+            <p class="text-center text-[10px] opacity-60 mb-6 uppercase tracking-widest">Create your searchable Agent Username</p>
+            <div class="space-y-4">
+                <input type="text" id="new-handle" placeholder="@username (e.g. moamen_cyber)" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-green-500 transition">
+                <button onclick="saveHandle()" class="w-full bg-green-500 text-white p-4 rounded-xl font-black uppercase text-xs">Confirm Username</button>
+            </div>
+        </div>
+
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[78vh]">
             <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Search Agents</h3>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Type username..." 
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Type @username..." 
                        class="mb-6 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber">
                 <div id="user-list" class="space-y-2 overflow-y-auto max-h-[30%] pr-2"></div>
 
@@ -60,12 +69,15 @@
             </div>
 
             <div class="lg:col-span-8 glass rounded-[2rem] flex flex-col overflow-hidden relative">
-                <div id="chat-header" class="p-5 border-b border-white/10 flex items-center gap-3 bg-white/5">
-                    <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase">?</div>
-                    <div>
-                        <h3 id="current-chat-name" class="font-bold text-sm uppercase">Select Agent or Group</h3>
-                        <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Encrypted Tunnel Offline</p>
+                <div id="chat-header" class="p-5 border-b border-white/10 flex items-center justify-between bg-white/5">
+                    <div class="flex items-center gap-3">
+                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase">?</div>
+                        <div>
+                            <h3 id="current-chat-name" class="font-bold text-sm uppercase">Select Node</h3>
+                            <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Tunnel Offline</p>
+                        </div>
                     </div>
+                    <button id="add-mem-btn" onclick="addMemberToGroup()" class="hidden bg-green-500/20 text-green-500 text-[9px] px-3 py-2 rounded-full font-black uppercase hover:bg-green-500 hover:text-white transition">+ Add Member</button>
                 </div>
                 <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-50/50 dark:bg-transparent"></div>
                 <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3">
@@ -112,18 +124,43 @@
                 const data = await res.json();
                 if (res.ok) {
                     currentUser = data;
-                    startChat();
+                    // فحص إذا كان اليوزر محتاج يكمل الـ Profile
+                    if (!isLogin || !data.handle) {
+                        showSetup();
+                    } else {
+                        startChat();
+                    }
                 } else { alert("Error: " + data.error); }
             } catch (e) { alert("Server Down."); }
         }
 
+        function showSetup() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('setup-section').classList.remove('hidden');
+        }
+
+        async function saveHandle() {
+            const handle = document.getElementById('new-handle').value.trim().toLowerCase();
+            if(!handle) return alert("Enter a username");
+            const res = await fetch('/add-member', { // استغلال نفس الـ Route لتحديث بيانات اليوزر نفسه
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: currentUser.username, handle: handle })
+            });
+            if(res.ok) {
+                currentUser.handle = handle;
+                startChat();
+            }
+        }
+
         function startChat() {
             document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('setup-section').classList.add('hidden');
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
-            document.getElementById('active-user').innerText = currentUser.username;
+            document.getElementById('active-user').innerText = "@" + (currentUser.handle || currentUser.username);
             
-            setInterval(syncAll, 1000); // تحديث شامل كل ثانية
+            setInterval(syncAll, 1000);
             loadGroups(); 
         }
 
@@ -155,27 +192,42 @@
         }
 
         async function loadGroups() {
-            const res = await fetch('/groups');
+            const res = await fetch(`/my-groups/${currentUser.username}`);
             const groups = await res.json();
             document.getElementById('group-list').innerHTML = Object.keys(groups).map(id => `
-                <div onclick="setGroup('${id}', '${groups[id].name}')" class="p-3 rounded-xl cursor-pointer bg-white/5 hover:bg-cyber/20 border border-white/5 transition animate-fade-in">
+                <div onclick="setGroup('${id}', '${groups[id].name}')" class="p-3 rounded-xl cursor-pointer bg-white/5 hover:bg-cyber/20 border border-white/5 transition animate-fade-in flex items-center justify-between">
                     <p class="font-bold text-[10px] uppercase text-cyber"># ${groups[id].name}</p>
+                    <div class="w-2 h-2 rounded-full bg-cyber animate-pulse"></div>
                 </div>`).join('');
+        }
+
+        async function addMemberToGroup() {
+            if(!activeGroup) return;
+            const newUser = prompt("Enter Username of Agent to add:");
+            if(!newUser) return;
+            const res = await fetch('/add-member', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ groupId: activeGroup.groupId, newUser: newUser })
+            });
+            if(res.ok) alert("Agent Added to " + activeGroup.name);
         }
 
         function setTarget(name, pub) {
             targetUser = { username: name, publicKey: pub };
             activeGroup = null;
+            document.getElementById('add-mem-btn').classList.add('hidden');
             document.getElementById('current-chat-name').innerText = name;
-            document.getElementById('chat-status').innerText = "Secure 1-to-1 RSA Tunnel Active";
+            document.getElementById('chat-status').innerText = "Secure RSA Tunnel Active";
             document.getElementById('msg-area').innerHTML = '';
         }
 
         function setGroup(id, name) {
             activeGroup = { groupId: id, name: name };
             targetUser = null;
-            document.getElementById('current-chat-name').innerText = "Group: " + name;
-            document.getElementById('chat-status').innerText = "Multi-cast Group Channel Active";
+            document.getElementById('add-mem-btn').classList.remove('hidden');
+            document.getElementById('current-chat-name').innerText = name;
+            document.getElementById('chat-status').innerText = "Multi-cast Group Active";
             document.getElementById('msg-area').innerHTML = '';
         }
 
@@ -183,7 +235,7 @@
             const input = document.getElementById('msg-input'), text = input.value;
             if(!text) return;
 
-            if(targetUser) { // شات فردي مشفر
+            if(targetUser) {
                 const pubKeyObj = pki.publicKeyFromPem(targetUser.publicKey.trim());
                 const encrypted = forge.util.encode64(pubKeyObj.encrypt(text));
                 await fetch('/send', {
@@ -192,7 +244,7 @@
                     body: JSON.stringify({ sender: currentUser.username, receiver: targetUser.username, message: encrypted })
                 });
                 document.getElementById('msg-area').innerHTML += `<div class="flex justify-end animate-fade-in"><div class="bg-cyber text-white p-3 rounded-2xl rounded-tr-none text-sm shadow-lg">${text}</div></div>`;
-            } else if(activeGroup) { // شات جروب
+            } else if(activeGroup) {
                 await fetch('/send-group', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -212,21 +264,21 @@
             pMsgs.forEach(m => {
                 try {
                     const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
-                    document.getElementById('msg-area').innerHTML += `<div class="flex justify-start animate-fade-in"><div class="glass p-3 rounded-2xl rounded-tl-none text-sm"><b>${m.sender}:</b><br>${decrypted}</div></div>`;
+                    document.getElementById('msg-area').innerHTML += `<div class="flex justify-start animate-fade-in"><div class="glass p-4 rounded-2xl rounded-tl-none text-sm"><b>${m.sender}:</b><br>${decrypted}</div></div>`;
                 } catch(e) {}
             });
 
-            // 2. مزامنة رسائل الجروب النشط
+            // 2. مزامنة رسائل الجروب
             if(activeGroup) {
                 const gRes = await fetch(`/group-messages/${activeGroup.groupId}`);
                 const gMsgs = await gRes.json();
                 const area = document.getElementById('msg-area');
-                area.innerHTML = ''; // إعادة بناء شاشة الجروب لحظياً
+                area.innerHTML = ''; 
                 Object.values(gMsgs).forEach(m => {
                     const isMe = m.sender === currentUser.username;
                     area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in">
-                        <div class="${isMe ? 'bg-cyber text-white' : 'glass'} p-3 rounded-2xl text-sm">
-                            <b class="text-[9px] uppercase">${m.sender}</b><br>${m.message}
+                        <div class="${isMe ? 'bg-cyber text-white' : 'glass'} p-4 rounded-2xl text-sm">
+                            <b class="text-[9px] uppercase ${isMe ? 'text-white/60' : 'text-cyber'}">${m.sender}</b><br>${m.message}
                         </div></div>`;
                 });
             }
