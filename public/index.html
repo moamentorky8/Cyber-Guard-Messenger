@@ -166,8 +166,6 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = currentUser.username;
-            
-            // تحديث الرسائل كل ثانية
             setInterval(syncSystem, 1000); 
         }
 
@@ -175,9 +173,9 @@
             const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
             const userListDiv = document.getElementById('user-list');
 
-            // إخفاء القائمة لو البحث فاضي أو أقل من حرفين
-            if (searchVal.length < 2) {
-                userListDiv.innerHTML = '<p class="text-[9px] text-center opacity-40 uppercase py-4">Type at least 2 chars to search...</p>';
+            // التعديل هنا: يبدأ البحث من أول حرف
+            if (searchVal.length === 0) {
+                userListDiv.innerHTML = '<p class="text-[9px] text-center opacity-40 uppercase py-4">Search for an agent to start</p>';
                 return;
             }
 
@@ -185,7 +183,6 @@
                 const res = await fetch(`/users`);
                 const data = await res.json();
                 
-                // البحث في الداتابيز وفلترة اليوزر الحالي
                 const filtered = data.filter(u => 
                     u.username.includes(searchVal) && u.username !== currentUser.username
                 );
