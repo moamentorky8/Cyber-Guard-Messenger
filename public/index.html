@@ -68,7 +68,7 @@
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[75vh]">
             <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Active Nodes</h3>
-                <input type="text" id="searchInput" onkeyup="loadUsers()" placeholder="Search Agent ID..." 
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent ID..." 
                        class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition">
                 <div id="user-list" class="space-y-2 overflow-y-auto flex-1 pr-2">
                     <p class="text-[9px] text-center opacity-40 uppercase py-4">Search for an agent to start</p>
@@ -173,7 +173,7 @@
             const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
             const userListDiv = document.getElementById('user-list');
 
-            // التعديل هنا: يبدأ البحث من أول حرف
+            // إذا كانت الخانة فارغة، اظهر رسالة التوجيه واخرج
             if (searchVal.length === 0) {
                 userListDiv.innerHTML = '<p class="text-[9px] text-center opacity-40 uppercase py-4">Search for an agent to start</p>';
                 return;
@@ -183,8 +183,9 @@
                 const res = await fetch(`/users`);
                 const data = await res.json();
                 
+                // البحث من أول حرف وتجنب اليوزر الحالي
                 const filtered = data.filter(u => 
-                    u.username.includes(searchVal) && u.username !== currentUser.username
+                    u.username.toLowerCase().includes(searchVal) && u.username !== currentUser.username
                 );
 
                 if (filtered.length === 0) {
@@ -207,7 +208,7 @@
                         </div>
                     </div>`;
                 }).join('');
-            } catch (e) { }
+            } catch (e) { console.error("Search failed"); }
         }
 
         function setTarget(name, pubKey) {
