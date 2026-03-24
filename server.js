@@ -51,7 +51,7 @@ app.post('/reset-password', async (req, res) => {
     res.json({ success: true });
 });
 
-// 4. جلب المستخدمين (بالهاندل)
+// 4. جلب المستخدمين
 app.get('/users', async (req, res) => {
     const snap = await db.ref("users").once("value");
     const data = snap.val() || {};
@@ -63,26 +63,25 @@ app.get('/users', async (req, res) => {
     })));
 });
 
-// 5. تحديث الهوية (Setup Identity)
+// 5. تحديث الهوية
 app.post('/add-member', async (req, res) => {
     const { username, handle } = req.body;
     await db.ref(`users/${username}`).update({ handle: handle.toLowerCase().trim() });
     res.json({ success: true });
 });
 
-// 6. إضافة عضو للجروب عن طريق الـ Handle (الميزة اللي طلبتها)
+// 6. إضافة عضو للجروب بالهاندل
 app.post('/add-member-by-handle', async (req, res) => {
     const { groupId, handle } = req.body;
     const h = handle.toLowerCase().trim();
     const userSnap = await db.ref("users").orderByChild("handle").equalTo(h).once("value");
     if (!userSnap.exists()) return res.status(404).json({ error: "Agent @nickname not found" });
-    
     const userKey = Object.keys(userSnap.val())[0];
     await db.ref(`groups/${groupId}/members/${userKey}`).set(true);
     res.json({ success: true });
 });
 
-// 7. إرسال رسالة خاصة (Private) وحفظها
+// 7. إرسال رسالة خاصة
 app.post('/send', async (req, res) => {
     const { sender, receiver, message } = req.body;
     const r = receiver.toLowerCase().trim();
@@ -91,8 +90,18 @@ app.post('/send', async (req, res) => {
     res.json({ success: true });
 });
 
-// 8. جلب رسايل الخاص (للمزامنة والحفظ)
-app.get('/messages/:u1/:u2', async (req, res) => {
+// --- [ ميزة الـ Inbox الجديدة ] ---
+// جلب كل الرسائل الموجهة لمستخدم معين (لعرضها في قائمة طلبات المراسلة)
+app.get('/messages/:username', async (req, res) => {
+    const u = req.params.username.toLowerCase().trim();
+    const snap = await db.ref("messages").orderByChild("receiver").equalTo(u).once("value");
+    const msgs = snap.val() || {};
+    // بنرجع الرسائل مرتبة من الأحدث للأقدم عشان الـ Inbox يظهر فيه آخر حاجة وصلت
+    res.json(Object.values(msgs).sort((a,b) => b.timestamp - a.timestamp));
+});
+
+// 8. جلب محادثة كاملة بين طرفين (Private Full Chat)
+app.get('/messages-full/:u1/:u2', async (req, res) => {
     const { u1, u2 } = req.params;
     const snap = await db.ref("messages").once("value");
     const all = snap.val() || {};
@@ -132,18 +141,16 @@ app.get('/group-messages/:groupId', async (req, res) => {
     res.json(Object.values(msgs).sort((a,b) => a.timestamp - b.timestamp));
 });
 
-// 10. التعديل والحذف (Live CRUD)
+// 10. التعديل والحذف
 app.post('/edit-message', async (req, res) => {
     const { msgId, newVal, sender } = req.body;
-    // البحث في الرسائل الخاصة
     const pRef = db.ref(`messages/${msgId}`);
     const pSnap = await pRef.once("value");
     if (pSnap.exists() && pSnap.val().sender === sender) {
         await pRef.update({ message: newVal });
         return res.json({ success: true });
     }
-    // لو مش خاصة، ندور في الجروبات (تبسيطاً للمشروع)
-    res.json({ success: false, error: "Not authorized or not found" });
+    res.json({ success: false, error: "Not authorized" });
 });
 
 app.post('/delete-message', async (req, res) => {
