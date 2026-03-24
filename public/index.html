@@ -104,29 +104,17 @@
         let myPrivKey = null, myPubKeyPem = null;
         const pki = forge.pki;
 
-        // استعادة الجلسة والبدء فوراً
-        window.onload = async function() {
-            const saved = localStorage.getItem('cyber_session');
-            if (saved) {
-                currentUser = JSON.parse(saved);
-                initKeys(currentUser.username);
-                startChat();
-            }
+        // التعديل المطلوب: مسح الجلسة عند الريفريش لضمان تجديد المفاتيح
+        window.onload = function() {
+            localStorage.removeItem('cyber_session');
+            console.log("Terminal Reset: Credentials Purged for Security.");
         };
 
         function initKeys(username) {
-            const privKey = localStorage.getItem(`priv_${username}`);
-            const pubKey = localStorage.getItem(`pub_${username}`);
-            if (privKey && pubKey) {
-                myPrivKey = pki.privateKeyFromPem(privKey);
-                myPubKeyPem = pubKey;
-            } else {
-                const pair = pki.rsa.generateKeyPair(1024);
-                myPrivKey = pair.privateKey;
-                myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_${username}`, pki.privateKeyToPem(myPrivKey));
-                localStorage.setItem(`pub_${username}`, myPubKeyPem);
-            }
+            // توليد طقم مفاتيح جديد "نظيف" مع كل دخول
+            const pair = pki.rsa.generateKeyPair(1024);
+            myPrivKey = pair.privateKey;
+            myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
         }
 
         function secureDecrypt(cipherTextB64) {
@@ -142,7 +130,9 @@
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Fill all fields");
-            initKeys(u);
+            
+            initKeys(u); // توليد مفاتيح جديدة
+
             const res = await fetch(isLogin ? '/login' : '/register', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
@@ -164,6 +154,7 @@
             document.getElementById('logout-btn').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (currentUser.handle || currentUser.username);
 
+            // تحديث السيرفر بالمفتاح الحالي فوراً
             await fetch('/update-key', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
@@ -180,12 +171,12 @@
             if(!text) return;
             try {
                 if(targetUser) {
-                    // سحب أحدث نسخة للمفتاح العام من السيرفر فوراً لضمان عدم وجود تضارب
+                    // سحب أحدث مفتاح عام للمستلم وتنظيفه
                     const userCheck = await fetch('/users');
                     const users = await userCheck.json();
                     const freshTarget = users.find(u => u.username === targetUser.username);
-                    
                     let pubKeySource = freshTarget ? freshTarget.publicKey : targetUser.publicKey;
+                    
                     let cleanPubKey = pubKeySource.replace(/\\n/g, '\n').trim();
                     const pubKey = pki.publicKeyFromPem(cleanPubKey);
                     
@@ -206,16 +197,11 @@
                     });
                 }
                 input.value = '';
-            } catch(e) { 
-                console.error("Encryption Failure:", e);
-                alert("Security Link Broken: Contact needs to re-sync their terminal."); 
-            }
+            } catch(e) { alert("Security Error: Target needs to login."); }
         }
 
         async function syncAll() {
             if(!currentUser) return;
-
-            // 1. Inbox Decryption
             try {
                 const inboxRes = await fetch(`/messages/${currentUser.username}`);
                 const inboxMsgs = await inboxRes.json();
@@ -231,12 +217,10 @@
                     </div>`).join('');
             } catch(e) {}
 
-            // 2. Main Chat View Sync
             if(!targetUser && !activeGroup) return;
             const endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
             const res = await fetch(endpoint);
             const msgs = await res.json();
-            
             if (msgs.length === lastMsgCount && lastMsgCount !== 0) return;
             lastMsgCount = msgs.length;
 
@@ -245,14 +229,14 @@
             msgs.forEach(m => {
                 let displayMsg = m.message;
                 if(targetUser && m.sender !== currentUser.username) {
-                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error: System Mismatch]</span>";
+                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error]</span>";
                 }
                 const isMe = m.sender === currentUser.username;
                 area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
                     <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5">
                         <b class="text-[9px] opacity-50 block">${m.sender}</b>
                         <span>${displayMsg}</span>
-                        ${isMe ? `<div class="mt-1 text-right"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
+                        ${isMe ? `<div class="mt-2 text-right"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
                     </div></div>`;
             });
             area.scrollTop = area.scrollHeight;
@@ -263,7 +247,7 @@
             const groups = await res.json();
             const members = groups[activeGroup.groupId].members;
             const list = Object.keys(members).join('\n');
-            const toRemove = prompt(`ACTIVE AGENTS:\n${list}\n\nType ID to EVICT (Admin only):`);
+            const toRemove = prompt(`ACTIVE AGENTS:\n${list}\n\nEnter ID to EVICT (Admin only):`);
             if(toRemove && currentUser.username === activeGroup.creator) {
                 const r = await fetch('/remove-group-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: toRemove.replace('@','')})});
                 if(r.ok) alert("Agent Evicted"); else alert("Action Refused");
@@ -293,7 +277,7 @@
         function openFromInbox(h) { const u = allCachedUsers.find(x => x.username === h || x.handle === h); if(u) setTarget(u); }
         async function editMsg(msgId) { const n = prompt("Edit:"); if(n) await fetch('/edit-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, newVal: n, sender: currentUser.username})}); lastMsgCount = 0; }
         async function deleteMsg(msgId) { if(confirm("Delete?")) await fetch('/delete-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, sender: currentUser.username})}); lastMsgCount = 0; }
-        function logout() { localStorage.removeItem('cyber_session'); location.reload(); }
+        function logout() { location.reload(); }
         function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Registration'; }
         function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
         async function saveHandle() { const h = document.getElementById('new-handle').value.trim().toLowerCase(); await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})}); currentUser.handle = h; localStorage.setItem('cyber_session', JSON.stringify(currentUser)); startChat(); }
