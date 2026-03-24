@@ -71,7 +71,7 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: "اليوزر أو الباسورد غلط" });
         }
         await userRef.update({ lastSeen: Date.now() });
-        res.json({ username: user.username, publicKey: user.publicKey });
+        res.json({ username: user.username, publicKey: user.publicKey, handle: user.handle || null });
     } catch (e) { res.status(500).json({ error: "فشل الدخول" }); }
 });
 
@@ -82,6 +82,7 @@ app.get('/users', async (req, res) => {
         const usersData = snapshot.val() || {};
         const usersList = Object.values(usersData).map(u => ({
             username: u.username,
+            handle: u.handle || u.username,
             publicKey: u.publicKey,
             status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline"
         }));
@@ -89,15 +90,15 @@ app.get('/users', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// --- مسارات الجروبات المتطورة ---
+// --- مسارات الجروبات وتحديث الهوية ---
 
-// إنشاء جروب وإضافة المنشئ كأول عضو
+// إنشاء جروب
 app.post('/create-group', async (req, res) => {
     try {
         const { groupName, creator } = req.body;
         const groupRef = db.ref("groups").push();
         const members = {};
-        members[creator] = true; // إضافة المنشئ تلقائياً
+        members[creator] = true; 
 
         await groupRef.set({
             name: groupName,
@@ -109,17 +110,30 @@ app.post('/create-group', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "فشل إنشاء الجروب" }); }
 });
 
-// إضافة عضو جديد للجروب (بواسطة Username)
+// المسار "الجوكر": تحديث الـ Handle أو إضافة عضو لجروب
 app.post('/add-member', async (req, res) => {
     try {
-        const { groupId, newUser } = req.body;
-        const cleanUser = newUser.toLowerCase().trim();
-        await db.ref(`groups/${groupId}/members/${cleanUser}`).set(true);
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "فشل إضافة العضو" }); }
+        const { username, handle, groupId, newUser } = req.body;
+
+        // الحالة 1: تحديث اليوزر نيم (Confirm Identity)
+        if (username && handle) {
+            const cleanHandle = handle.toLowerCase().trim();
+            await db.ref(`users/${username}`).update({ handle: cleanHandle });
+            return res.json({ success: true, message: "Identity Verified" });
+        }
+
+        // الحالة 2: إضافة عضو لجروب
+        if (groupId && newUser) {
+            const cleanUser = newUser.toLowerCase().trim();
+            await db.ref(`groups/${groupId}/members/${cleanUser}`).set(true);
+            return res.json({ success: true, message: "Member Added" });
+        }
+
+        res.status(400).json({ error: "Missing Parameters" });
+    } catch (e) { res.status(500).json({ error: "Server Update Failed" }); }
 });
 
-// جلب الجروبات اللي اليوزر مشترك فيها بس (Snap Style)
+// جلب جروبات المستخدم
 app.get('/my-groups/:username', async (req, res) => {
     try {
         const user = req.params.username.toLowerCase().trim();
@@ -136,7 +150,6 @@ app.get('/my-groups/:username', async (req, res) => {
     } catch (e) { res.json({}); }
 });
 
-// إرسال رسالة للجروب
 app.post('/send-group', async (req, res) => {
     try {
         const { groupId, sender, message } = req.body;
@@ -146,10 +159,9 @@ app.post('/send-group', async (req, res) => {
             timestamp: Date.now()
         });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
+    } catch (e) { res.status(500).json({ error: "Error sending to group" }); }
 });
 
-// جلب رسائل الجروب
 app.get('/group-messages/:groupId', async (req, res) => {
     try {
         const { groupId } = req.params;
@@ -160,7 +172,6 @@ app.get('/group-messages/:groupId', async (req, res) => {
 
 // --- نهاية مسارات الجروبات ---
 
-// إرسال رسالة فردية
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
@@ -172,10 +183,9 @@ app.post('/send', async (req, res) => {
             timestamp: Date.now()
         });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
+    } catch (e) { res.status(500).json({ error: "Send Error" }); }
 });
 
-// استقبال الرسائل الخاصة وحذفها
 app.get('/messages/:username', async (req, res) => {
     try {
         const target = req.params.username.toLowerCase().trim();
