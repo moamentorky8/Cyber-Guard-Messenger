@@ -17,7 +17,7 @@
         .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .user-item { cursor: pointer; transition: all 0.2s; position: relative; z-index: 50; }
+        .user-item { cursor: pointer; transition: all 0.2s; position: relative; }
         .user-item:active { transform: scale(0.97); }
     </style>
 </head>
@@ -59,7 +59,6 @@
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Search Agents</h3>
                 <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search by handle..." class="mb-6 bg-black/40 border border-white/10 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber">
                 <div id="user-list" class="space-y-2 overflow-y-auto mb-4 border-b border-white/5 pb-2"></div>
-                
                 <div class="mt-4 border-t border-white/10 pt-4 flex-1 flex flex-col overflow-hidden">
                     <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase tracking-[0.3em]">
                         <span>Secure Groups</span>
@@ -86,9 +85,7 @@
                 <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-black/20"></div>
                 <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3">
                     <input type="text" id="msg-input" placeholder="Type secure data..." class="flex-1 bg-black/40 rounded-2xl p-4 text-sm outline-none border border-white/10 focus:border-cyber">
-                    <button onclick="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white shadow-xl hover:scale-105 transition-all">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                    </button>
+                    <button onclick="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white shadow-xl hover:scale-105 transition-all">SEND</button>
                 </div>
             </div>
         </div>
@@ -116,17 +113,15 @@
         }
 
         async function resetPass() {
-            const u = prompt("Enter username to reset:");
-            const p = prompt("Enter new password:");
+            const u = prompt("Username:"); const p = prompt("New Password:");
             if(!u || !p) return;
             const res = await fetch('/reset-password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:p})});
-            if(res.ok) alert("Access Granted. Password Updated.");
+            if(res.ok) alert("Password Updated.");
         }
 
         function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
         async function saveHandle() {
             const h = document.getElementById('new-handle').value.trim().toLowerCase();
-            if(!h) return;
             await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})});
             currentUser.handle = h; startChat();
         }
@@ -144,23 +139,28 @@
             if(!val) { list.innerHTML = ''; return; }
             const res = await fetch('/users'); const data = await res.json();
             list.innerHTML = data.filter(u => (u.handle.toLowerCase().includes(val) || u.username.includes(val)) && u.username !== currentUser.username).map(u => `
-                <div onclick="setTarget('${u.username}', '${u.handle}', '${u.publicKey}')" class="user-item p-3 mb-1 rounded-xl bg-cyber/5 border border-white/5 hover:bg-cyber/20 flex items-center justify-between group">
+                <div class="user-item select-btn p-3 mb-1 rounded-xl bg-cyber/5 border border-white/5 hover:bg-cyber/20 flex items-center justify-between" 
+                     data-u="${u.username}" data-h="${u.handle}" data-p="${u.publicKey}">
                     <div class="flex items-center gap-3 pointer-events-none">
-                        <div class="w-2 h-2 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-red-500'}"></div>
-                        <p class="font-bold text-[11px] uppercase tracking-tighter text-cyber">@${u.handle}</p>
+                        <div class="w-2 h-2 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_8px_cyan]' : 'bg-red-500'}"></div>
+                        <p class="font-bold text-[11px] uppercase text-cyber">@${u.handle}</p>
                     </div>
-                    <span class="text-[8px] font-black opacity-30 group-hover:opacity-100 uppercase pointer-events-none transition-all">Select</span>
+                    <span class="text-[8px] font-black opacity-30 uppercase pointer-events-none">Select</span>
                 </div>`).join('');
         }
+
+        // الحل النهائي لمشكلة الاختيار (Event Delegation)
+        document.getElementById('user-list').addEventListener('click', (e) => {
+            const btn = e.target.closest('.select-btn');
+            if(btn) setTarget(btn.dataset.u, btn.dataset.h, btn.dataset.p);
+        });
 
         function setTarget(u, h, pk) {
             targetUser = {username: u, handle: h, publicKey: pk}; activeGroup = null;
             document.getElementById('chat-title').innerText = "@" + h;
-            document.getElementById('chat-status').innerText = "RSA SECURE TUNNEL ONLINE";
+            document.getElementById('chat-status').innerText = "RSA TUNNEL ACTIVE";
             document.getElementById('add-mem-btn').classList.add('hidden'); document.getElementById('delete-group-btn').classList.add('hidden');
-            document.getElementById('msg-area').innerHTML = ''; 
-            document.getElementById('user-list').innerHTML = ''; 
-            document.getElementById('searchInput').value = '';
+            document.getElementById('msg-area').innerHTML = ''; document.getElementById('user-list').innerHTML = ''; document.getElementById('searchInput').value = '';
         }
 
         async function createGroup() {
@@ -172,27 +172,24 @@
         async function loadGroups() {
             const res = await fetch(`/my-groups/${currentUser.username}`); const groups = await res.json();
             document.getElementById('group-list').innerHTML = Object.keys(groups).map(id => `
-                <div onclick="setGroup('${id}', '${groups[id].name}', '${groups[id].creator}')" class="p-4 bg-white/5 hover:bg-cyber/10 rounded-2xl cursor-pointer text-[10px] font-black uppercase text-cyber border border-white/5 mb-2 transition-all">
-                    # ${groups[id].name}
-                </div>`).join('');
+                <div onclick="setGroup('${id}', '${groups[id].name}', '${groups[id].creator}')" class="p-4 bg-white/5 hover:bg-cyber/10 rounded-2xl cursor-pointer text-[10px] font-black uppercase text-cyber border border-white/5 mb-2"># ${groups[id].name}</div>`).join('');
         }
 
         async function addMemberToGroup() {
-            const u = prompt("Agent Username to add:"); if(!u) return;
-            const res = await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, newUser: u})});
-            if(res.ok) alert("Access Granted to " + u);
+            const u = prompt("Username to add:"); if(!u) return;
+            await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, newUser: u})});
+            alert("Added!");
         }
 
         async function deleteActiveGroup() {
-            if(!confirm("Terminate Network Group?")) return;
-            const res = await fetch('/delete-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: currentUser.username})});
-            if(res.ok) location.reload();
+            if(!confirm("Delete?")) return;
+            await fetch('/delete-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: currentUser.username})});
+            location.reload();
         }
 
         function setGroup(id, n, c) {
             activeGroup = {groupId: id, name: n}; targetUser = null;
             document.getElementById('chat-title').innerText = "# " + n;
-            document.getElementById('chat-status').innerText = "MULTI-CAST BROADCAST ACTIVE";
             document.getElementById('add-mem-btn').classList.remove('hidden');
             if(c === currentUser.username) document.getElementById('delete-group-btn').classList.remove('hidden'); else document.getElementById('delete-group-btn').classList.add('hidden');
             document.getElementById('msg-area').innerHTML = '';
@@ -203,7 +200,7 @@
             if(targetUser) {
                 const enc = forge.util.encode64(pki.publicKeyFromPem(targetUser.publicKey).encrypt(text));
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: enc})});
-                document.getElementById('msg-area').innerHTML += `<div class="flex justify-end animate-fade-in"><div class="bg-cyber text-white p-3 rounded-2xl rounded-tr-none text-sm shadow-[0_0_15px_rgba(6,182,212,0.3)]">${text}</div></div>`;
+                document.getElementById('msg-area').innerHTML += `<div class="flex justify-end animate-fade-in"><div class="bg-cyber text-white p-3 rounded-2xl rounded-tr-none text-sm shadow-lg">${text}</div></div>`;
             } else if(activeGroup) {
                 await fetch('/send-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, sender: currentUser.username, message: text})});
             }
@@ -213,13 +210,13 @@
         async function syncAll() {
             if(!currentUser) return;
             const pRes = await fetch(`/messages/${currentUser.username}`); const pMsgs = await pRes.json();
-            pMsgs.forEach(m => { try { const d = myPrivKey.decrypt(forge.util.decode64(m.message)); document.getElementById('msg-area').innerHTML += `<div class="flex justify-start animate-fade-in"><div class="glass p-3 rounded-2xl rounded-tl-none text-sm border-white/10"><b>${m.sender}:</b><br>${d}</div></div>`; } catch(e) {} });
+            pMsgs.forEach(m => { try { const d = myPrivKey.decrypt(forge.util.decode64(m.message)); document.getElementById('msg-area').innerHTML += `<div class="flex justify-start animate-fade-in"><div class="glass p-3 rounded-2xl rounded-tl-none text-sm"><b>${m.sender}:</b> ${d}</div></div>`; } catch(e) {} });
             if(activeGroup) {
                 const gRes = await fetch(`/group-messages/${activeGroup.groupId}`); const gMsgs = await gRes.json();
                 const area = document.getElementById('msg-area'); area.innerHTML = '';
                 Object.values(gMsgs).forEach(m => {
                     const isMe = m.sender === currentUser.username;
-                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="${isMe ? 'bg-cyber text-white' : 'glass'} p-3 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm border-white/5 shadow-lg"><b>${m.sender}:</b><br>${m.message}</div></div>`;
+                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="${isMe ? 'bg-cyber text-white' : 'glass'} p-3 rounded-2xl text-sm"><b>${m.sender}:</b> ${m.message}</div></div>`;
                 });
             }
         }
