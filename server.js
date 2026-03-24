@@ -7,7 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize Firebase
+// 1. إعداد Firebase
 if (!admin.apps.length) {
     try {
         let serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : require("./serviceAccountKey.json");
@@ -15,19 +15,20 @@ if (!admin.apps.length) {
             credential: admin.credential.cert(serviceAccount),
             databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
         });
+        console.log("Firebase Connected");
     } catch (e) { console.error("Firebase Error:", e); }
 }
 
 const db = admin.database();
 const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
-// --- IDENTITY ---
+// 2. إدارة الحسابات (Identity)
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
         const u = username.toLowerCase().trim();
         const ref = db.ref(`users/${u}`);
-        if ((await ref.once("value")).exists()) return res.status(400).json({ error: "Node exists" });
+        if ((await ref.once("value")).exists()) return res.status(400).json({ error: "Agent ID exists" });
         await ref.set({ username: u, password: hash(password), publicKey, lastSeen: Date.now(), handle: u, status: 'online' });
         res.status(201).json({ success: true });
     } catch (e) { res.status(500).send(); }
@@ -38,37 +39,24 @@ app.post('/login', async (req, res) => {
     const u = username.toLowerCase().trim();
     const snap = await db.ref(`users/${u}`).once("value");
     const user = snap.val();
-    if (!user || user.password !== hash(password)) return res.status(401).json({ error: "Denied" });
+    if (!user || user.password !== hash(password)) return res.status(401).json({ error: "Access Denied" });
     await db.ref(`users/${u}`).update({ lastSeen: Date.now(), status: 'online' });
     res.json({ username: u, publicKey: user.publicKey, handle: user.handle || u });
 });
 
+// تحديث المفتاح العام (مهم جداً لفك التشفير)
 app.post('/update-key', async (req, res) => {
     await db.ref(`users/${req.body.username.toLowerCase().trim()}`).update({ publicKey: req.body.publicKey });
     res.json({ success: true });
 });
 
-app.post('/reset-password', async (req, res) => {
-    const { username, newPassword } = req.body;
-    await db.ref(`users/${username.toLowerCase().trim()}`).update({ password: hash(newPassword) });
-    res.json({ success: true });
-});
-
-// --- MESSAGING ---
+// 3. المراسلة (Messaging)
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
-        // تأكد إن المسج مش فاضية وواصلة مشفرة
         if (!message) return res.status(400).send();
-        
         const msgRef = db.ref("messages").push();
-        await msgRef.set({
-            id: msgRef.key,
-            sender,
-            receiver: receiver.toLowerCase().trim(),
-            message,
-            timestamp: Date.now()
-        });
+        await msgRef.set({ id: msgRef.key, sender, receiver: receiver.toLowerCase().trim(), message, timestamp: Date.now() });
         res.json({ success: true });
     } catch (err) { res.status(500).send(); }
 });
@@ -87,7 +75,7 @@ app.get('/messages-full/:u1/:u2', async (req, res) => {
     res.json(filtered);
 });
 
-// --- GROUPS ---
+// 4. الجروبات (Secure Sectors)
 app.post('/create-group', async (req, res) => {
     const ref = db.ref("groups").push();
     await ref.set({ name: req.body.groupName, creator: req.body.creator, members: { [req.body.creator]: true } });
@@ -103,6 +91,7 @@ app.post('/add-member-by-handle', async (req, res) => {
     res.json({ success: true });
 });
 
+// طرد عضو من الجروب
 app.post('/remove-group-member', async (req, res) => {
     await db.ref(`groups/${req.body.groupId}/members/${req.body.username.toLowerCase().trim()}`).remove();
     res.json({ success: true });
@@ -128,7 +117,7 @@ app.get('/group-messages/:groupId', async (req, res) => {
     res.json(Object.values(snap.val() || {}).sort((a,b) => a.timestamp - b.timestamp));
 });
 
-// --- CRUD ---
+// 5. تعديل ومسح الرسايل (CRUD)
 app.post('/edit-message', async (req, res) => {
     const ref = db.ref(`messages/${req.body.msgId}`);
     const snap = await ref.once("value");
@@ -156,6 +145,7 @@ app.post('/delete-group', async (req, res) => {
     } else res.status(403).send();
 });
 
+// 6. خدمات إضافية
 app.get('/users', async (req, res) => {
     const snap = await db.ref("users").once("value");
     const data = snap.val() || {};
@@ -172,9 +162,16 @@ app.post('/add-member', async (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/reset-password', async (req, res) => {
+    const { username, newPassword } = req.body;
+    await db.ref(`users/${username.toLowerCase().trim()}`).update({ password: hash(newPassword) });
+    res.json({ success: true });
+});
+
+// تقديم صفحة الانديكس
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Cyber Server Running on Port ${PORT}`));
 
 module.exports = app;
