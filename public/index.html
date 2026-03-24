@@ -11,14 +11,14 @@
         tailwind.config = { darkMode: 'class', theme: { extend: { colors: { cyber: '#06b6d4' } } } }
     </script>
     <style>
-        body { font-family: 'Inter', sans-serif; background: #020617; color: white; user-select: none !important; -webkit-user-select: none !important; }
+        body { font-family: 'Inter', sans-serif; background: #020617; color: white; user-select: none !important; }
         .glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
         .chat-area::-webkit-scrollbar { width: 4px; }
         .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        /* منع أي تحديد للنص لضمان استجابة الطبقة الشفافة */
-        .user-item * { pointer-events: none !important; }
+        /* ضمان ظهور أزرار السيرش فوق أي تداخل */
+        #user-list { position: relative; z-index: 10000 !important; }
     </style>
 </head>
 <body class="p-4 min-h-screen">
@@ -57,10 +57,11 @@
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[78vh] animate-fade-in">
             <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Search Agents</h3>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search by handle..." class="mb-6 bg-black/40 border border-white/10 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber text-white">
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search handle..." class="mb-6 bg-black/40 border border-white/10 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber text-white">
                 <div id="user-list" class="space-y-2 overflow-y-auto mb-4 border-b border-white/5 pb-2"></div>
+                
                 <div class="mt-4 border-t border-white/10 pt-4 flex-1 flex flex-col overflow-hidden">
-                    <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase tracking-[0.3em]">
+                    <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase">
                         <span>Secure Groups</span>
                         <button onclick="createGroup()" class="text-cyber hover:underline">+ Create</button>
                     </div>
@@ -74,7 +75,7 @@
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase text-xs">?</div>
                         <div>
                             <h3 id="current-chat-name" class="font-bold text-sm uppercase">Select Node</h3>
-                            <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold tracking-tighter italic">Tunnel Offline</p>
+                            <p id="chat-status" class="text-[9px] text-slate-500 uppercase font-bold italic">Offline</p>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -84,8 +85,8 @@
                 </div>
                 <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-black/20"></div>
                 <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3">
-                    <input type="text" id="msg-input" placeholder="Type secure data..." class="flex-1 bg-black/40 rounded-2xl p-4 text-sm outline-none border border-white/10 focus:border-cyber text-white">
-                    <button onclick="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white shadow-xl">SEND</button>
+                    <input type="text" id="msg-input" placeholder="Type data..." class="flex-1 bg-black/40 rounded-2xl p-4 text-sm outline-none border border-white/10 focus:border-cyber text-white">
+                    <button onmousedown="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white">SEND</button>
                 </div>
             </div>
         </div>
@@ -96,16 +97,11 @@
         const pki = forge.pki, keypair = pki.rsa.generateKeyPair(1024);
         const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey), myPrivKey = keypair.privateKey;
 
-        function toggleAuth() {
-            isLogin = !isLogin;
-            document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Register Identity';
-            document.getElementById('btn-main').innerText = isLogin ? 'Authorize Access' : 'Register & Start';
-        }
+        function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Register Identity'; }
 
         async function handleAuth() {
             const user = document.getElementById('username').value.trim().toLowerCase();
             const pass = document.getElementById('password').value.trim();
-            if(!user || !pass) return alert("Fill data");
             const res = await fetch(isLogin ? '/login' : '/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:user, password:pass, publicKey:myPubKeyPem})});
             const data = await res.json();
             if(res.ok) { currentUser = data; if(!isLogin || !data.handle) showSetup(); else startChat(); } else alert(data.error);
@@ -113,15 +109,13 @@
 
         async function resetPass() {
             const u = prompt("User:"), p = prompt("New Pass:");
-            if(!u || !p) return;
             const res = await fetch('/reset-password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:p})});
-            if(res.ok) alert("Security Override Successful.");
+            if(res.ok) alert("Passcode Updated.");
         }
 
         function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
         async function saveHandle() {
             const h = document.getElementById('new-handle').value.trim().toLowerCase();
-            if(!h) return;
             await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})});
             currentUser.handle = h; startChat();
         }
@@ -138,34 +132,43 @@
             const list = document.getElementById('user-list');
             if(!val) { list.innerHTML = ''; return; }
             const res = await fetch('/users'); const data = await res.json();
+            const filtered = data.filter(u => (u.handle.toLowerCase().includes(val) || u.username.includes(val)) && u.username !== currentUser.username);
             
-            list.innerHTML = data.filter(u => (u.handle.toLowerCase().includes(val) || u.username.includes(val)) && u.username !== currentUser.username).map(u => `
-                <div class="user-item p-3 mb-1 rounded-xl bg-cyber/10 border border-cyber/20 flex items-center justify-between relative overflow-hidden">
-                    <div onclick="setTarget('${u.username}', '${u.handle}', '${u.publicKey}')" 
-                         class="absolute inset-0 z-[9999] cursor-pointer bg-transparent active:bg-cyber/20 transition-all" 
-                         style="pointer-events: auto !important;">
+            list.innerHTML = '';
+            filtered.forEach(u => {
+                const btn = document.createElement('button');
+                btn.type = "button";
+                btn.className = "w-full p-4 mb-2 rounded-2xl bg-cyber/10 border-2 border-cyber/20 flex items-center justify-between hover:bg-cyber/30 transition-all active:scale-95 shadow-lg text-left";
+                btn.style.cssText = "display: flex !important; cursor: pointer !important; z-index: 10001 !important;";
+                
+                // استخدام onmousedown للسرعة القصوى
+                btn.onmousedown = (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    setTarget(u.username, u.handle, u.publicKey);
+                };
+
+                btn.innerHTML = `
+                    <div class="flex items-center gap-3 pointer-events-none">
+                        <div class="w-3 h-3 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500'}"></div>
+                        <p class="font-black text-xs uppercase tracking-tighter text-cyber">@${u.handle}</p>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <div class="w-2 h-2 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_8px_cyan]' : 'bg-red-500'}"></div>
-                        <p class="font-bold text-[11px] uppercase tracking-tighter text-cyber">@${u.handle}</p>
-                    </div>
-                    <span class="text-[8px] font-black opacity-30 uppercase tracking-widest text-white">Select Agent</span>
-                </div>`).join('');
+                    <div class="bg-cyber/20 px-2 py-1 rounded text-[8px] font-black text-white pointer-events-none uppercase">Select</div>
+                `;
+                list.appendChild(btn);
+            });
         }
 
         function setTarget(u, h, pk) {
-            console.log("SET TARGET:", h);
             targetUser = {username: u, handle: h, publicKey: pk}; activeGroup = null;
             document.getElementById('current-chat-name').innerText = "@" + h;
-            document.getElementById('chat-status').innerText = "RSA TUNNEL ONLINE";
+            document.getElementById('chat-status').innerText = "SECURE RSA TUNNEL ACTIVE";
             document.getElementById('add-mem-btn').classList.add('hidden'); document.getElementById('delete-group-btn').classList.add('hidden');
-            document.getElementById('msg-area').innerHTML = ''; 
-            document.getElementById('user-list').innerHTML = ''; 
-            document.getElementById('searchInput').value = '';
+            document.getElementById('msg-area').innerHTML = ''; document.getElementById('user-list').innerHTML = ''; document.getElementById('searchInput').value = '';
+            setTimeout(() => document.getElementById('msg-input').focus(), 50);
         }
 
         async function createGroup() {
-            const n = prompt("Name:"); if(!n) return;
+            const n = prompt("Group Name:"); if(!n) return;
             await fetch('/create-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupName: n, creator: currentUser.username})});
             loadGroups();
         }
@@ -173,11 +176,11 @@
         async function loadGroups() {
             const res = await fetch(`/my-groups/${currentUser.username}`); const groups = await res.json();
             document.getElementById('group-list').innerHTML = Object.keys(groups).map(id => `
-                <div onclick="setGroup('${id}', '${groups[id].name}', '${groups[id].creator}')" class="p-4 bg-white/5 hover:bg-cyber/10 rounded-2xl cursor-pointer text-[10px] font-black uppercase text-cyber border border-white/5 mb-2 transition-all"># ${groups[id].name}</div>`).join('');
+                <button onmousedown="setGroup('${id}', '${groups[id].name}', '${groups[id].creator}')" class="w-full p-4 bg-white/5 hover:bg-cyber/10 rounded-2xl cursor-pointer text-[10px] font-black uppercase text-cyber border border-white/5 mb-2 text-left"># ${groups[id].name}</button>`).join('');
         }
 
         async function addMemberToGroup() {
-            const u = prompt("ID:"); if(!u) return;
+            const u = prompt("ID to add:"); if(!u) return;
             await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, newUser: u})});
         }
 
@@ -200,7 +203,7 @@
             if(targetUser) {
                 const enc = forge.util.encode64(pki.publicKeyFromPem(targetUser.publicKey).encrypt(text));
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: enc})});
-                document.getElementById('msg-area').innerHTML += `<div class="flex justify-end animate-fade-in"><div class="bg-cyber text-white p-3 rounded-2xl rounded-tr-none text-sm shadow-[0_0_15px_rgba(6,182,212,0.3)]">${text}</div></div>`;
+                document.getElementById('msg-area').innerHTML += `<div class="flex justify-end animate-fade-in"><div class="bg-cyber text-white p-3 rounded-2xl text-sm">${text}</div></div>`;
             } else if(activeGroup) {
                 await fetch('/send-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, sender: currentUser.username, message: text})});
             }
@@ -210,13 +213,13 @@
         async function syncAll() {
             if(!currentUser) return;
             const pRes = await fetch(`/messages/${currentUser.username}`); const pMsgs = await pRes.json();
-            pMsgs.forEach(m => { try { const d = myPrivKey.decrypt(forge.util.decode64(m.message)); document.getElementById('msg-area').innerHTML += `<div class="flex justify-start animate-fade-in"><div class="glass p-3 rounded-2xl rounded-tl-none text-sm border-white/10"><b>${m.sender}:</b><br>${d}</div></div>`; } catch(e) {} });
+            pMsgs.forEach(m => { try { const d = myPrivKey.decrypt(forge.util.decode64(m.message)); document.getElementById('msg-area').innerHTML += `<div class="flex justify-start animate-fade-in"><div class="glass p-3 rounded-2xl text-sm"><b>${m.sender}:</b><br>${d}</div></div>`; } catch(e) {} });
             if(activeGroup) {
                 const gRes = await fetch(`/group-messages/${activeGroup.groupId}`); const gMsgs = await gRes.json();
                 const area = document.getElementById('msg-area'); area.innerHTML = '';
                 Object.values(gMsgs).forEach(m => {
                     const isMe = m.sender === currentUser.username;
-                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="${isMe ? 'bg-cyber text-white' : 'glass'} p-3 rounded-2xl text-sm border-white/5 shadow-lg"><b>${m.sender}:</b><br>${m.message}</div></div>`;
+                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in"><div class="${isMe ? 'bg-cyber text-white' : 'glass'} p-3 rounded-2xl text-sm"><b>${m.sender}:</b><br>${m.message}</div></div>`;
                 });
             }
         }
