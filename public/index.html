@@ -58,11 +58,9 @@
         </div>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[78vh] animate-slide-up">
-            
             <div class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
                 <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Search Agents</h3>
                 <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search handle..." class="mb-4 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs outline-none">
-                
                 <div id="user-list" class="space-y-2 overflow-y-auto mb-4 border-b border-white/5 pb-2 max-h-[150px]"></div>
 
                 <h3 class="text-[10px] font-black text-cyber uppercase tracking-[0.3em] mb-4">Incoming Requests</h3>
@@ -73,7 +71,7 @@
                 <div class="mt-4 border-t border-white/10 pt-4">
                     <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase tracking-[0.3em]">
                         <span>Secure Groups</span>
-                        <button onclick="createGroup()" class="text-cyber hover:underline font-bold">+ Create</button>
+                        <button onclick="createGroup()" class="text-cyber hover:underline font-bold cursor-pointer">+ Create</button>
                     </div>
                     <div id="group-list" class="space-y-2 overflow-y-auto max-h-[150px]"></div>
                 </div>
@@ -85,7 +83,7 @@
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase text-xs">?</div>
                         <div>
                             <h3 id="current-chat-name" class="font-bold text-sm uppercase tracking-tight text-cyber">Select Node</h3>
-                            <p id="chat-status" class="text-[9px] opacity-40 uppercase font-black tracking-tighter italic">Waiting for connection...</p>
+                            <p id="chat-status" class="text-[9px] opacity-40 uppercase font-black tracking-tighter italic">Offline</p>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -105,8 +103,29 @@
     <script>
         let isLogin = true, currentUser = null, targetUser = null, activeGroup = null;
         let lastMsgCount = 0, allCachedUsers = [];
-        const pki = forge.pki, keypair = pki.rsa.generateKeyPair(1024);
-        const myPubKeyPem = pki.publicKeyToPem(keypair.publicKey), myPrivKey = keypair.privateKey;
+        let myPrivKey = null, myPubKeyPem = null;
+        const pki = forge.pki;
+
+        // الحل النهائي لمشكلة التشفير: إدارة المفاتيح باسم المستخدم
+        function initKeys(username) {
+            const privStore = `priv_${username}`;
+            const pubStore = `pub_${username}`;
+            const storedPriv = localStorage.getItem(privStore);
+            const storedPub = localStorage.getItem(pubStore);
+
+            if (storedPriv && storedPub) {
+                myPrivKey = pki.privateKeyFromPem(storedPriv);
+                myPubKeyPem = storedPub;
+                console.log("RSA: Keys Restored");
+            } else {
+                const pair = pki.rsa.generateKeyPair(1024);
+                myPrivKey = pair.privateKey;
+                myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
+                localStorage.setItem(privStore, pki.privateKeyToPem(myPrivKey));
+                localStorage.setItem(pubStore, myPubKeyPem);
+                console.log("RSA: New Keys Generated");
+            }
+        }
 
         function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Agent Login' : 'Register Identity'; }
 
@@ -114,7 +133,14 @@
             const user = document.getElementById('username').value.trim().toLowerCase();
             const pass = document.getElementById('password').value.trim();
             if(!user || !pass) return alert("System Error: Credentials Missing");
-            const res = await fetch(isLogin ? '/login' : '/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:user, password:pass, publicKey:myPubKeyPem})});
+
+            initKeys(user); // تجهيز المفاتيح قبل الطلب
+
+            const res = await fetch(isLogin ? '/login' : '/register', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({username:user, password:pass, publicKey:myPubKeyPem})
+            });
             const data = await res.json();
             if(res.ok) { currentUser = data; if(!isLogin || !data.handle) showSetup(); else startChat(); } else alert(data.error);
         }
@@ -122,7 +148,6 @@
         function logout() { location.reload(); }
 
         function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
-        
         async function saveHandle() {
             const h = document.getElementById('new-handle').value.trim().toLowerCase();
             await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})});
@@ -140,8 +165,6 @@
             document.getElementById('chat-section').classList.remove('hidden'); document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('logout-btn').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (currentUser.handle || currentUser.username);
-            
-            // تحديث دوري ذكي
             setInterval(syncAll, 1500); 
             setInterval(refreshUsers, 5000);
             refreshUsers(); loadGroups();
@@ -156,7 +179,6 @@
             const val = document.getElementById('searchInput').value.trim().toLowerCase();
             const list = document.getElementById('user-list');
             if(!val) { list.innerHTML = ''; return; }
-            
             const filtered = allCachedUsers.filter(u => u.handle.toLowerCase().includes(val) && u.username !== currentUser.username);
             list.innerHTML = '';
             filtered.forEach(u => {
@@ -222,31 +244,32 @@
         async function syncAll() {
             if(!currentUser) return;
 
-            // 1. تحديث قائمة الـ Inbox (Message Requests)
+            // 1. تحديث قائمة الـ Inbox
             const globalRes = await fetch(`/messages/${currentUser.username}`);
             const globalMsgs = await globalRes.json();
             const inboxList = document.getElementById('inbox-list');
             
-            // تجميع آخر رسالة من كل مرسل وفك تشفيرها فوراً
             const lastMessages = {};
             globalMsgs.forEach(m => {
-                try {
-                    const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
-                    lastMessages[m.sender] = { text: decrypted, timestamp: m.timestamp };
-                } catch(e) { lastMessages[m.sender] = { text: "Encrypted Transmission", timestamp: m.timestamp }; }
+                if(!lastMessages[m.sender]) {
+                    try {
+                        const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
+                        lastMessages[m.sender] = { text: decrypted };
+                    } catch(e) { lastMessages[m.sender] = { text: "Secure Transmission" }; }
+                }
             });
 
             if (Object.keys(lastMessages).length > 0) {
                 inboxList.innerHTML = Object.keys(lastMessages).map(sender => `
-                    <div onmousedown="openFromInbox('${sender}')" class="p-3 glass rounded-xl cursor-pointer relative hover:bg-cyber/10 transition-all border-l-2 border-cyber active:scale-95 group">
+                    <div onmousedown="openFromInbox('${sender}')" class="p-3 glass rounded-xl cursor-pointer relative hover:bg-cyber/10 transition-all border-l-2 border-cyber mb-1">
                         <div class="notification-dot"></div>
                         <p class="text-[10px] font-black uppercase text-cyber">@${sender}</p>
-                        <p class="text-[10px] opacity-60 truncate font-mono">${lastMessages[sender].text}</p>
+                        <p class="text-[9px] opacity-60 truncate font-mono">${lastMessages[sender].text}</p>
                     </div>
                 `).join('');
             }
 
-            // 2. تحديث الشات المفتوح حالياً
+            // 2. تحديث الشات المفتوح
             if(!targetUser && !activeGroup) return;
             const area = document.getElementById('msg-area');
             let endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
@@ -262,25 +285,23 @@
                 msgList.forEach(m => {
                     let d = m.message;
                     if(targetUser && m.sender !== currentUser.username) {
-                        try { d = myPrivKey.decrypt(forge.util.decode64(m.message)); } catch(e) { d = "[Encryption Error]"; }
+                        try { d = myPrivKey.decrypt(forge.util.decode64(m.message)); } catch(e) { d = "[Cipher Error: Use login device]"; }
                     }
                     const isMe = m.sender === currentUser.username;
                     area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                        <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm relative mb-2">
+                        <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1">
                             <b class="text-[9px] opacity-50 uppercase tracking-widest">${m.sender}</b><br>${d}
                         </div>
                     </div>`;
                 });
                 area.scrollTop = area.scrollHeight;
-            } catch(e) { console.log("Sync optimized..."); }
+            } catch(e) { console.log("Silent Sync active..."); }
         }
 
         function openFromInbox(senderHandle) {
             const user = allCachedUsers.find(u => u.username === senderHandle || u.handle === senderHandle);
             if(user) setTarget(user);
         }
-
-        async function logout() { location.reload(); }
     </script>
 </body>
 </html>
