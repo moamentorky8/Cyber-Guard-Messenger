@@ -7,205 +7,119 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعدادات الربط بـ Firebase ---
 if (!admin.apps.length) {
     try {
-        let serviceAccount;
-        if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-            const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
-            serviceAccount = JSON.parse(rawJson);
-            if (serviceAccount.private_key) {
-                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-            }
-            console.log("☁️ Connected via Vercel Secrets");
-        } else {
-            serviceAccount = require("./serviceAccountKey.json");
-            console.log("✅ Connected via Local JSON File");
-        }
+        let serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : require("./serviceAccountKey.json");
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
         });
-    } catch (e) {
-        console.error("❌ Firebase Initialization Failed:", e.message);
-    }
+    } catch (e) { console.error(e); }
 }
-
 const db = admin.database();
+const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
-function hashPassword(p) { 
-    return crypto.createHash('sha256').update(p).digest('hex'); 
-}
-
-// --- 2. المسارات (API Routes) ---
-
-// تسجيل مستخدم جديد
+// --- المسارات ---
 app.post('/register', async (req, res) => {
-    try {
-        const { username, password, publicKey } = req.body;
-        if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة" });
-        const cleanUser = username.toLowerCase().trim();
-        const userRef = db.ref("users/" + cleanUser);
-        const snapshot = await userRef.once("value");
-        if (snapshot.exists()) return res.status(400).json({ error: "الاسم مسجل بالفعل" });
-
-        await userRef.set({
-            username: cleanUser,
-            password: hashPassword(password),
-            publicKey: publicKey || "",
-            lastSeen: Date.now()
-        });
-        res.status(201).json({ message: "Success", username: cleanUser });
-    } catch (e) { res.status(500).json({ error: "خطأ في السيرفر" }); }
+    const { username, password, publicKey } = req.body;
+    const u = username.toLowerCase().trim();
+    const ref = db.ref("users/" + u);
+    if ((await ref.once("value")).exists()) return res.status(400).json({ error: "مسجل مسبقاً" });
+    await ref.set({ username: u, password: hash(password), publicKey, lastSeen: Date.now() });
+    res.status(201).json({ success: true });
 });
 
-// تسجيل الدخول
 app.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const cleanUser = username.toLowerCase().trim();
-        const userRef = db.ref("users/" + cleanUser);
-        const snapshot = await userRef.once("value");
-        const user = snapshot.val();
-        if (!user || user.password !== hashPassword(password)) {
-            return res.status(401).json({ error: "اليوزر أو الباسورد غلط" });
-        }
-        await userRef.update({ lastSeen: Date.now() });
-        res.json({ username: user.username, publicKey: user.publicKey, handle: user.handle || null });
-    } catch (e) { res.status(500).json({ error: "فشل الدخول" }); }
+    const { username, password } = req.body;
+    const u = username.toLowerCase().trim();
+    const snap = await db.ref("users/" + u).once("value");
+    const user = snap.val();
+    if (!user || user.password !== hash(password)) return res.status(401).json({ error: "بيانات غلط" });
+    await db.ref("users/" + u).update({ lastSeen: Date.now() });
+    res.json({ username: u, publicKey: user.publicKey, handle: user.handle || null });
 });
 
-// قائمة المستخدمين
+// إعادة تعيين الباسورد (اللي رجعناه)
+app.post('/reset-password', async (req, res) => {
+    const { username, newPassword } = req.body;
+    const u = username.toLowerCase().trim();
+    const ref = db.ref("users/" + u);
+    if (!(await ref.once("value")).exists()) return res.status(404).json({ error: "اليوزر مش موجود" });
+    await ref.update({ password: hash(newPassword) });
+    res.json({ success: true });
+});
+
 app.get('/users', async (req, res) => {
-    try {
-        const snapshot = await db.ref("users").once("value");
-        const usersData = snapshot.val() || {};
-        const usersList = Object.values(usersData).map(u => ({
-            username: u.username,
-            handle: u.handle || u.username,
-            publicKey: u.publicKey,
-            status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline"
-        }));
-        res.json(usersList);
-    } catch (e) { res.json([]); }
+    const snap = await db.ref("users").once("value");
+    const data = snap.val() || {};
+    res.json(Object.values(data).map(u => ({ username: u.username, handle: u.handle || u.username, publicKey: u.publicKey, status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline" })));
 });
 
-// --- مسارات الجروبات وتحديث الهوية ---
-
-// إنشاء جروب
-app.post('/create-group', async (req, res) => {
-    try {
-        const { groupName, creator } = req.body;
-        const groupRef = db.ref("groups").push();
-        const members = {};
-        members[creator] = true; 
-
-        await groupRef.set({
-            name: groupName,
-            creator: creator,
-            members: members,
-            createdAt: Date.now()
-        });
-        res.json({ success: true, groupId: groupRef.key });
-    } catch (e) { res.status(500).json({ error: "فشل إنشاء الجروب" }); }
-});
-
-// المسار "الجوكر": تحديث الـ Handle أو إضافة عضو لجروب
 app.post('/add-member', async (req, res) => {
-    try {
-        const { username, handle, groupId, newUser } = req.body;
-
-        // الحالة 1: تحديث اليوزر نيم (Confirm Identity)
-        if (username && handle) {
-            const cleanHandle = handle.toLowerCase().trim();
-            await db.ref(`users/${username}`).update({ handle: cleanHandle });
-            return res.json({ success: true, message: "Identity Verified" });
-        }
-
-        // الحالة 2: إضافة عضو لجروب
-        if (groupId && newUser) {
-            const cleanUser = newUser.toLowerCase().trim();
-            await db.ref(`groups/${groupId}/members/${cleanUser}`).set(true);
-            return res.json({ success: true, message: "Member Added" });
-        }
-
-        res.status(400).json({ error: "Missing Parameters" });
-    } catch (e) { res.status(500).json({ error: "Server Update Failed" }); }
+    const { username, handle, groupId, newUser } = req.body;
+    if (username && handle) {
+        await db.ref(`users/${username}`).update({ handle: handle.toLowerCase().trim() });
+        return res.json({ success: true });
+    }
+    if (groupId && newUser) {
+        await db.ref(`groups/${groupId}/members/${newUser.toLowerCase().trim()}`).set(true);
+        return res.json({ success: true });
+    }
+    res.status(400).send();
 });
 
-// جلب جروبات المستخدم
+app.post('/create-group', async (req, res) => {
+    const { groupName, creator } = req.body;
+    const ref = db.ref("groups").push();
+    await ref.set({ name: groupName, creator, members: { [creator]: true } });
+    res.json({ success: true, groupId: ref.key });
+});
+
 app.get('/my-groups/:username', async (req, res) => {
-    try {
-        const user = req.params.username.toLowerCase().trim();
-        const snapshot = await db.ref("groups").once("value");
-        const allGroups = snapshot.val() || {};
-        const myGroups = {};
-        
-        for (let id in allGroups) {
-            if (allGroups[id].members && allGroups[id].members[user]) {
-                myGroups[id] = allGroups[id];
-            }
-        }
-        res.json(myGroups);
-    } catch (e) { res.json({}); }
+    const u = req.params.username.toLowerCase().trim();
+    const snap = await db.ref("groups").once("value");
+    const all = snap.val() || {};
+    const mine = {};
+    for (let id in all) { if (all[id].members && all[id].members[u]) mine[id] = all[id]; }
+    res.json(mine);
+});
+
+app.post('/delete-group', async (req, res) => {
+    const { groupId, username } = req.body;
+    const ref = db.ref(`groups/${groupId}`);
+    const snap = await ref.once("value");
+    if (snap.exists() && snap.val().creator === username) {
+        await ref.remove();
+        res.json({ success: true });
+    } else res.status(403).json({ error: "ممنوع" });
 });
 
 app.post('/send-group', async (req, res) => {
-    try {
-        const { groupId, sender, message } = req.body;
-        await db.ref(`groups/${groupId}/messages`).push({
-            sender,
-            message,
-            timestamp: Date.now()
-        });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Error sending to group" }); }
+    await db.ref(`groups/${req.body.groupId}/messages`).push({ sender: req.body.sender, message: req.body.message, timestamp: Date.now() });
+    res.json({ success: true });
 });
 
 app.get('/group-messages/:groupId', async (req, res) => {
-    try {
-        const { groupId } = req.params;
-        const snapshot = await db.ref(`groups/${groupId}/messages`).once("value");
-        res.json(snapshot.val() || {});
-    } catch (e) { res.json({}); }
+    const snap = await db.ref(`groups/${req.params.groupId}/messages`).once("value");
+    res.json(snap.val() || {});
 });
 
-// --- نهاية مسارات الجروبات ---
-
 app.post('/send', async (req, res) => {
-    try {
-        const { sender, receiver, message } = req.body;
-        const msgRef = db.ref("messages").push(); 
-        await msgRef.set({
-            sender,
-            receiver: receiver.toLowerCase().trim(),
-            message,
-            timestamp: Date.now()
-        });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Send Error" }); }
+    await db.ref("messages").push().set({ sender: req.body.sender, receiver: req.body.receiver.toLowerCase().trim(), message: req.body.message, timestamp: Date.now() });
+    res.json({ success: true });
 });
 
 app.get('/messages/:username', async (req, res) => {
-    try {
-        const target = req.params.username.toLowerCase().trim();
-        const msgRef = db.ref("messages");
-        const snapshot = await msgRef.orderByChild("receiver").equalTo(target).once("value");
-        const msgsData = snapshot.val() || {};
-        const msgsList = Object.values(msgsData);
-        if (msgsList.length > 0) {
-            const updates = {};
-            Object.keys(msgsData).forEach(key => { updates[key] = null; });
-            await msgRef.update(updates);
-        }
-        res.json(msgsList);
-    } catch (e) { res.json([]); }
+    const u = req.params.username.toLowerCase().trim();
+    const snap = await db.ref("messages").orderByChild("receiver").equalTo(u).once("value");
+    const msgs = snap.val() || {};
+    if (Object.keys(msgs).length > 0) {
+        const up = {}; Object.keys(msgs).forEach(k => up[k] = null);
+        await db.ref("messages").update(up);
+    }
+    res.json(Object.values(msgs));
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
 module.exports = app;
-
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(3000, () => console.log(`🚀 Server Running on http://localhost:3000`));
-}
+if (process.env.NODE_ENV !== 'production') app.listen(3000);
