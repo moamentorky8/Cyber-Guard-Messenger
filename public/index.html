@@ -69,7 +69,7 @@
                 </div>
                 
                 <div class="mt-4 border-t border-white/10 pt-4">
-                    <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase tracking-[0.3em]">
+                    <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase">
                         <span>Secure Groups</span>
                         <button onclick="createGroup()" class="text-cyber hover:underline font-bold cursor-pointer">+ Create</button>
                     </div>
@@ -106,7 +106,6 @@
         let myPrivKey = null, myPubKeyPem = null;
         const pki = forge.pki;
 
-        // الحل النهائي لمشكلة التشفير: إدارة المفاتيح باسم المستخدم
         function initKeys(username) {
             const privStore = `priv_${username}`;
             const pubStore = `pub_${username}`;
@@ -116,14 +115,12 @@
             if (storedPriv && storedPub) {
                 myPrivKey = pki.privateKeyFromPem(storedPriv);
                 myPubKeyPem = storedPub;
-                console.log("RSA: Keys Restored");
             } else {
                 const pair = pki.rsa.generateKeyPair(1024);
                 myPrivKey = pair.privateKey;
                 myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
                 localStorage.setItem(privStore, pki.privateKeyToPem(myPrivKey));
                 localStorage.setItem(pubStore, myPubKeyPem);
-                console.log("RSA: New Keys Generated");
             }
         }
 
@@ -133,20 +130,13 @@
             const user = document.getElementById('username').value.trim().toLowerCase();
             const pass = document.getElementById('password').value.trim();
             if(!user || !pass) return alert("System Error: Credentials Missing");
-
-            initKeys(user); // تجهيز المفاتيح قبل الطلب
-
-            const res = await fetch(isLogin ? '/login' : '/register', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({username:user, password:pass, publicKey:myPubKeyPem})
-            });
+            initKeys(user);
+            const res = await fetch(isLogin ? '/login' : '/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:user, password:pass, publicKey:myPubKeyPem}) });
             const data = await res.json();
             if(res.ok) { currentUser = data; if(!isLogin || !data.handle) showSetup(); else startChat(); } else alert(data.error);
         }
 
         function logout() { location.reload(); }
-
         function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
         async function saveHandle() {
             const h = document.getElementById('new-handle').value.trim().toLowerCase();
@@ -232,42 +222,46 @@
 
         async function dispatchMessage() {
             const input = document.getElementById('msg-input'), text = input.value.trim(); if(!text) return;
-            if(targetUser) {
-                const enc = forge.util.encode64(pki.publicKeyFromPem(targetUser.publicKey).encrypt(text));
-                await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: enc})});
-            } else if(activeGroup) {
-                await fetch('/send-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, sender: currentUser.username, message: text})});
-            }
-            input.value = '';
+            try {
+                if(targetUser) {
+                    // التشفير باستخدام OAEP وهو المعيار الأضمن
+                    const pubKey = pki.publicKeyFromPem(targetUser.publicKey);
+                    const encrypted = pubKey.encrypt(text, 'RSA-OAEP');
+                    const encBase64 = forge.util.encode64(encrypted);
+                    await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: encBase64})});
+                } else if(activeGroup) {
+                    await fetch('/send-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, sender: currentUser.username, message: text})});
+                }
+                input.value = '';
+            } catch(e) { alert("Encryption Failure: Check Agent Keys"); }
         }
 
         async function syncAll() {
             if(!currentUser) return;
 
             // 1. تحديث قائمة الـ Inbox
-            const globalRes = await fetch(`/messages/${currentUser.username}`);
-            const globalMsgs = await globalRes.json();
-            const inboxList = document.getElementById('inbox-list');
-            
-            const lastMessages = {};
-            globalMsgs.forEach(m => {
-                if(!lastMessages[m.sender]) {
-                    try {
-                        const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message));
-                        lastMessages[m.sender] = { text: decrypted };
-                    } catch(e) { lastMessages[m.sender] = { text: "Secure Transmission" }; }
+            try {
+                const globalRes = await fetch(`/messages/${currentUser.username}`);
+                const globalMsgs = await globalRes.json();
+                const inboxList = document.getElementById('inbox-list');
+                const lastMessages = {};
+                globalMsgs.forEach(m => {
+                    if(!lastMessages[m.sender]) {
+                        try {
+                            const decrypted = myPrivKey.decrypt(forge.util.decode64(m.message), 'RSA-OAEP');
+                            lastMessages[m.sender] = { text: decrypted };
+                        } catch(e) { lastMessages[m.sender] = { text: "Secure Data..." }; }
+                    }
+                });
+                if (Object.keys(lastMessages).length > 0) {
+                    inboxList.innerHTML = Object.keys(lastMessages).map(sender => `
+                        <div onmousedown="openFromInbox('${sender}')" class="p-3 glass rounded-xl cursor-pointer relative hover:bg-cyber/10 transition-all border-l-2 border-cyber mb-1">
+                            <div class="notification-dot"></div>
+                            <p class="text-[10px] font-black uppercase text-cyber">@${sender}</p>
+                            <p class="text-[9px] opacity-60 truncate font-mono">${lastMessages[sender].text}</p>
+                        </div>`).join('');
                 }
-            });
-
-            if (Object.keys(lastMessages).length > 0) {
-                inboxList.innerHTML = Object.keys(lastMessages).map(sender => `
-                    <div onmousedown="openFromInbox('${sender}')" class="p-3 glass rounded-xl cursor-pointer relative hover:bg-cyber/10 transition-all border-l-2 border-cyber mb-1">
-                        <div class="notification-dot"></div>
-                        <p class="text-[10px] font-black uppercase text-cyber">@${sender}</p>
-                        <p class="text-[9px] opacity-60 truncate font-mono">${lastMessages[sender].text}</p>
-                    </div>
-                `).join('');
-            }
+            } catch(e) {}
 
             // 2. تحديث الشات المفتوح
             if(!targetUser && !activeGroup) return;
@@ -285,17 +279,19 @@
                 msgList.forEach(m => {
                     let d = m.message;
                     if(targetUser && m.sender !== currentUser.username) {
-                        try { d = myPrivKey.decrypt(forge.util.decode64(m.message)); } catch(e) { d = "[Cipher Error: Use login device]"; }
+                        try {
+                            // فك التشفير باستخدام نفس المعيار RSA-OAEP
+                            d = myPrivKey.decrypt(forge.util.decode64(m.message), 'RSA-OAEP');
+                        } catch(e) { d = "<span class='text-red-400 italic'>[Encryption Mismatch - Refresh Required]</span>"; }
                     }
                     const isMe = m.sender === currentUser.username;
-                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
+                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up">
                         <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1">
                             <b class="text-[9px] opacity-50 uppercase tracking-widest">${m.sender}</b><br>${d}
-                        </div>
-                    </div>`;
+                        </div></div>`;
                 });
                 area.scrollTop = area.scrollHeight;
-            } catch(e) { console.log("Silent Sync active..."); }
+            } catch(e) {}
         }
 
         function openFromInbox(senderHandle) {
