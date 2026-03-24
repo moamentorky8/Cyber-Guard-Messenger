@@ -180,8 +180,13 @@
             if(!text) return;
             try {
                 if(targetUser) {
-                    // تنظيف المفتاح العام المستلم من السيرفر قبل التشفير به
-                    let cleanPubKey = targetUser.publicKey.replace(/\\n/g, '\n').trim();
+                    // سحب أحدث نسخة للمفتاح العام من السيرفر فوراً لضمان عدم وجود تضارب
+                    const userCheck = await fetch('/users');
+                    const users = await userCheck.json();
+                    const freshTarget = users.find(u => u.username === targetUser.username);
+                    
+                    let pubKeySource = freshTarget ? freshTarget.publicKey : targetUser.publicKey;
+                    let cleanPubKey = pubKeySource.replace(/\\n/g, '\n').trim();
                     const pubKey = pki.publicKeyFromPem(cleanPubKey);
                     
                     const utf8Text = forge.util.encodeUtf8(text);
@@ -247,7 +252,7 @@
                     <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5">
                         <b class="text-[9px] opacity-50 block">${m.sender}</b>
                         <span>${displayMsg}</span>
-                        ${isMe ? `<div class="mt-2 text-right"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
+                        ${isMe ? `<div class="mt-1 text-right"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
                     </div></div>`;
             });
             area.scrollTop = area.scrollHeight;
@@ -276,7 +281,6 @@
             if(r.ok) alert("Node Authorized"); else alert("Agent not found in database.");
         }
 
-        // Helpers
         async function refreshUsers() { const r = await fetch('/users'); allCachedUsers = await r.json(); }
         async function loadUsers() {
             const v = document.getElementById('searchInput').value.trim().toLowerCase();
