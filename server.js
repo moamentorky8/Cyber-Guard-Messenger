@@ -7,6 +7,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Initialize Firebase
 if (!admin.apps.length) {
     try {
         let serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : require("./serviceAccountKey.json");
@@ -20,8 +21,7 @@ if (!admin.apps.length) {
 const db = admin.database();
 const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
-// --- IDENTITY PROTOCOLS ---
-
+// --- IDENTITY ---
 app.post('/register', async (req, res) => {
     try {
         const { username, password, publicKey } = req.body;
@@ -48,27 +48,26 @@ app.post('/update-key', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- MESSAGING WITH ENCRYPTION CHECK ---
+app.post('/reset-password', async (req, res) => {
+    const { username, newPassword } = req.body;
+    await db.ref(`users/${username.toLowerCase().trim()}`).update({ password: hash(newPassword) });
+    res.json({ success: true });
+});
 
+// --- MESSAGING ---
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message } = req.body;
+        // تأكد إن المسج مش فاضية وواصلة مشفرة
+        if (!message) return res.status(400).send();
         
-        // [ميزة البرو ماكس]: السيرفر يتأكد إن الرسالة مشفرة بصيغة Base64 قبل الحفظ
-        const isBase64 = /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/.test(message);
-        
-        if (!isBase64) {
-            return res.status(400).json({ error: "Insecure Payload: Transmission must be RSA encrypted" });
-        }
-
         const msgRef = db.ref("messages").push();
         await msgRef.set({
             id: msgRef.key,
             sender,
             receiver: receiver.toLowerCase().trim(),
-            message, // الرسالة المشفرة القادمة من الانديكس
-            timestamp: Date.now(),
-            encrypted: true // وسم لزيادة الأمان
+            message,
+            timestamp: Date.now()
         });
         res.json({ success: true });
     } catch (err) { res.status(500).send(); }
@@ -88,8 +87,7 @@ app.get('/messages-full/:u1/:u2', async (req, res) => {
     res.json(filtered);
 });
 
-// --- GROUP MANAGEMENT ---
-
+// --- GROUPS ---
 app.post('/create-group', async (req, res) => {
     const ref = db.ref("groups").push();
     await ref.set({ name: req.body.groupName, creator: req.body.creator, members: { [req.body.creator]: true } });
@@ -106,8 +104,7 @@ app.post('/add-member-by-handle', async (req, res) => {
 });
 
 app.post('/remove-group-member', async (req, res) => {
-    const { groupId, username } = req.body;
-    await db.ref(`groups/${groupId}/members/${username.toLowerCase().trim()}`).remove();
+    await db.ref(`groups/${req.body.groupId}/members/${req.body.username.toLowerCase().trim()}`).remove();
     res.json({ success: true });
 });
 
@@ -115,7 +112,8 @@ app.get('/my-groups/:username', async (req, res) => {
     const snap = await db.ref("groups").once("value");
     const all = snap.val() || {};
     const mine = {};
-    for (let id in all) { if (all[id].members && all[id].members[req.params.username.toLowerCase()]) mine[id] = all[id]; }
+    const u = req.params.username.toLowerCase();
+    for (let id in all) { if (all[id].members && all[id].members[u]) mine[id] = all[id]; }
     res.json(mine);
 });
 
@@ -131,7 +129,6 @@ app.get('/group-messages/:groupId', async (req, res) => {
 });
 
 // --- CRUD ---
-
 app.post('/edit-message', async (req, res) => {
     const ref = db.ref(`messages/${req.body.msgId}`);
     const snap = await ref.once("value");
@@ -161,11 +158,23 @@ app.post('/delete-group', async (req, res) => {
 
 app.get('/users', async (req, res) => {
     const snap = await db.ref("users").once("value");
-    res.json(Object.values(snap.val() || {}).map(u => ({ username: u.username, handle: u.handle, publicKey: u.publicKey, status: (Date.now() - u.lastSeen < 120000) ? "online" : "offline" })));
+    const data = snap.val() || {};
+    res.json(Object.values(data).map(u => ({
+        username: u.username,
+        handle: u.handle || u.username,
+        publicKey: u.publicKey,
+        status: (Date.now() - u.lastSeen < 120000) ? "online" : "offline"
+    })));
+});
+
+app.post('/add-member', async (req, res) => {
+    await db.ref(`users/${req.body.username.toLowerCase().trim()}`).update({ handle: req.body.handle.toLowerCase().trim() });
+    res.json({ success: true });
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(3000, () => console.log(`Cyber Server Active` Swan-Dive Edition));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 module.exports = app;
