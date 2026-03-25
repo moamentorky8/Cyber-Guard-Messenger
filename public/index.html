@@ -108,19 +108,29 @@
             myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
         }
 
-        // فك التشفير المُحسّن (النسخة النهائية)
+        // تنظيف Base64 قبل atob
+        function safeAtob(str) {
+            try {
+                // إضافة padding لو ناقص
+                str = str.replace(/[^A-Za-z0-9+/=]/g, '');
+                const padding = str.length % 4;
+                if (padding) str += '='.repeat(4 - padding);
+                return atob(str);
+            } catch (e) {
+                console.error("safeAtob failed for:", str.substring(0, 50));
+                throw new Error("Invalid base64 key from server");
+            }
+        }
+
         function secureDecrypt(cipherTextB64) {
             if (!myPrivKey) return null;
             try {
                 const encryptedBytes = forge.util.decode64(cipherTextB64);
-                const decrypted = myPrivKey.decrypt(encryptedBytes, 'RSA-OAEP', {
-                    md: forge.md.sha1.create(),
-                    mgf1: { md: forge.md.sha1.create() }
-                });
+                const decrypted = myPrivKey.decrypt(encryptedBytes, 'RSA-OAEP');
                 return forge.util.decodeUtf8(decrypted);
             } catch (e) {
                 console.error("Decryption failed:", e.message);
-                return "🔒 Decryption Error - Key mismatch";
+                return "🔒 Decryption Error - Padding mismatch";
             }
         }
 
@@ -161,7 +171,6 @@
             refreshUsers(); loadGroups();
         }
 
-        // إرسال الرسالة المُحسّن (النسخة النهائية)
         async function dispatchMessage() {
             const input = document.getElementById('msg-input');
             const text = input.value.trim();
@@ -174,15 +183,11 @@
                     const freshTarget = users.find(u => u.username === targetUser.username);
                     if (!freshTarget?.publicKey) throw new Error("Target public key not found");
 
-                    // تنظيف الـ public key
-                    let pem = atob(freshTarget.publicKey);
-                    const pubKey = pki.publicKeyFromPem(pem);
+                    // تنظيف الـ public key قبل atob
+                    const cleanPem = safeAtob(freshTarget.publicKey);
+                    const pubKey = pki.publicKeyFromPem(cleanPem);
 
-                    // تشفير مع OAEP + SHA1 (متوافق مع الـ decrypt)
-                    const encryptedBytes = pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP', {
-                        md: forge.md.sha1.create(),
-                        mgf1: { md: forge.md.sha1.create() }
-                    });
+                    const encryptedBytes = pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP');
                     const encryptedB64 = forge.util.encode64(encryptedBytes);
 
                     await fetch('/send', {
@@ -205,15 +210,14 @@
                 }
                 input.value = '';
             } catch(e) {
-                console.error("Send Error:", e);
-                alert("Failed to send message.\nCheck console (F12) for details.");
+                console.error("Send Error:", e.message);
+                alert("Failed to send: " + e.message + "\nCheck console for details.");
             }
         }
 
         async function syncAll() {
             if(!currentUser) return;
             try {
-                // Inbox
                 const inboxRes = await fetch(`/messages/${currentUser.username}`);
                 const inboxMsgs = await inboxRes.json();
                 const lastMsgs = {};
@@ -229,7 +233,6 @@
                         <p class="text-[9px] opacity-60 truncate">${lastMsgs[s]}</p>
                     </div>`).join('');
 
-                // Chat area
                 if(!targetUser && !activeGroup) return;
                 const endpoint = targetUser 
                     ? `/messages-full/${currentUser.username}/${targetUser.username}` 
@@ -259,7 +262,7 @@
             } catch(e) { console.error(e); }
         }
 
-        // باقي الدوال (بدون تغيير)
+        // باقي الدوال بدون تغيير
         async function editMsg(msgId) {
             const newVal = prompt("Rewrite Packet Content:");
             if(newVal) {
