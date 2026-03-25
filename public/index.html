@@ -17,7 +17,7 @@
         .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-opacity text-[10px] ml-2 cursor-pointer; }
+        .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-opacity text-[10px] ml-2 cursor-pointer inline-block bg-white/5 px-2 py-0.5 rounded hover:bg-white/20; }
         .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
     </style>
 </head>
@@ -31,7 +31,7 @@
         <div class="flex items-center gap-4">
             <div id="user-badge" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
                 <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
-                <span id="active-user" class="text-xs font-bold"></span>
+                <span id="active-user" class="text-xs font-bold tracking-tighter uppercase"></span>
             </div>
             <button onclick="logout()" id="logout-btn" class="hidden bg-red-500/20 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition">Logout</button>
         </div>
@@ -59,17 +59,17 @@
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[78vh] animate-slide-up">
             <aside class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
-                <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Search Agents</h3>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search handle..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none">
+                <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Nodes Scan</h3>
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search handle..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber">
                 <div id="user-list" class="space-y-2 overflow-y-auto mb-4 border-b border-white/5 pb-2 max-h-[150px]"></div>
 
-                <h3 class="text-[10px] font-black text-cyber uppercase tracking-[0.3em] mb-4">Inbox</h3>
+                <h3 class="text-[10px] font-black text-cyber uppercase tracking-[0.3em] mb-4 text-center">Inbound Packets</h3>
                 <div id="inbox-list" class="flex-1 space-y-2 overflow-y-auto pr-2"></div>
                 
                 <div class="mt-4 border-t border-white/10 pt-4">
                     <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase">
-                        <span>Secure Groups</span>
-                        <button onclick="createGroup()" class="text-cyber hover:underline font-bold">+ Create</button>
+                        <span>Secure Sectors</span>
+                        <button onclick="createGroup()" class="text-cyber hover:underline font-bold">+ New</button>
                     </div>
                     <div id="group-list" class="space-y-2 overflow-y-auto max-h-[120px]"></div>
                 </div>
@@ -78,22 +78,22 @@
             <div class="lg:col-span-8 glass rounded-[2rem] flex flex-col overflow-hidden relative">
                 <div id="chat-header" class="p-5 border-b border-white/10 flex items-center justify-between bg-white/5">
                     <div class="flex items-center gap-3">
-                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase text-xs shadow-inner transition-all">?</div>
+                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase text-xs shadow-inner">?</div>
                         <div>
                             <h3 id="current-chat-name" class="font-bold text-sm uppercase">Select Node</h3>
                             <p id="chat-status" class="text-[9px] opacity-40 uppercase font-black">Offline</p>
                         </div>
                     </div>
                     <div class="flex gap-2">
-                        <button id="manage-mem-btn" onclick="openMemberManager()" class="hidden bg-cyber/10 text-cyber text-[9px] px-3 py-2 rounded-full font-black uppercase border border-cyber/20">Manage Members</button>
-                        <button id="add-mem-btn" onclick="addMemberToGroup()" class="hidden bg-green-500/10 text-green-500 text-[9px] px-3 py-2 rounded-full font-black uppercase">+ Member</button>
-                        <button id="delete-group-btn" onclick="deleteActiveGroup()" class="hidden bg-red-500/10 text-red-500 text-[9px] px-3 py-2 rounded-full font-black uppercase">Terminate</button>
+                        <button id="manage-mem-btn" onclick="openMemberManager()" class="hidden bg-cyber/10 text-cyber text-[9px] px-3 py-2 rounded-full font-black uppercase border border-cyber/20">Manage</button>
+                        <button id="add-mem-btn" onclick="addMemberToGroup()" class="hidden bg-green-500/10 text-green-500 text-[9px] px-3 py-2 rounded-full font-black uppercase">+ Add</button>
+                        <button id="delete-group-btn" onclick="deleteActiveGroup()" class="hidden bg-red-500/10 text-red-500 text-[9px] px-3 py-2 rounded-full font-black uppercase">Destroy</button>
                     </div>
                 </div>
                 <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-50/50 dark:bg-transparent"></div>
                 <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3">
-                    <input type="text" id="msg-input" placeholder="Type message..." class="flex-1 bg-slate-950 rounded-2xl p-4 text-sm outline-none focus:ring-1 focus:ring-cyber">
-                    <button onclick="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white shadow-xl hover:scale-105 active:scale-90 transition-all">SEND</button>
+                    <input type="text" id="msg-input" placeholder="Type secure message..." class="flex-1 bg-slate-950 rounded-2xl p-4 text-sm outline-none focus:ring-1 focus:ring-cyber">
+                    <button onclick="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white shadow-xl hover:scale-105 active:scale-90 transition-all font-black uppercase text-xs">Send</button>
                 </div>
             </div>
         </div>
@@ -104,14 +104,13 @@
         let myPrivKey = null, myPubKeyPem = null;
         const pki = forge.pki;
 
-        // التعديل المطلوب: مسح الجلسة عند الريفريش لضمان تجديد المفاتيح
+        // ميزة الـ Logout عند الريفريش لضمان تجديد المفاتيح والأمان
         window.onload = function() {
             localStorage.removeItem('cyber_session');
-            console.log("Terminal Reset: Credentials Purged for Security.");
+            console.log("Terminal Purged. Session Reset.");
         };
 
         function initKeys(username) {
-            // توليد طقم مفاتيح جديد "نظيف" مع كل دخول
             const pair = pki.rsa.generateKeyPair(1024);
             myPrivKey = pair.privateKey;
             myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
@@ -129,9 +128,9 @@
         async function handleAuth() {
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
-            if(!u || !p) return alert("Fill all fields");
+            if(!u || !p) return alert("System Warning: Credentials Missing");
             
-            initKeys(u); // توليد مفاتيح جديدة
+            initKeys(u); // توليد طقم مفاتيح RSA جديد
 
             const res = await fetch(isLogin ? '/login' : '/register', { 
                 method: 'POST', 
@@ -154,14 +153,14 @@
             document.getElementById('logout-btn').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (currentUser.handle || currentUser.username);
 
-            // تحديث السيرفر بالمفتاح الحالي فوراً
+            // مزامنة فورية للمفتاح الجديد مع السيرفر
             await fetch('/update-key', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({username: currentUser.username, publicKey: myPubKeyPem}) 
             });
 
-            setInterval(syncAll, 1500); 
+            setInterval(syncAll, 1500); // سرعة تحديث 1.5 ثانية كما في النظام القديم
             setInterval(refreshUsers, 5000);
             refreshUsers(); loadGroups();
         }
@@ -171,7 +170,7 @@
             if(!text) return;
             try {
                 if(targetUser) {
-                    // سحب أحدث مفتاح عام للمستلم وتنظيفه
+                    // Force Sync للمفتاح قبل الإرسال (حل مشكلة التشفير الجذري)
                     const userCheck = await fetch('/users');
                     const users = await userCheck.json();
                     const freshTarget = users.find(u => u.username === targetUser.username);
@@ -180,14 +179,12 @@
                     let cleanPubKey = pubKeySource.replace(/\\n/g, '\n').trim();
                     const pubKey = pki.publicKeyFromPem(cleanPubKey);
                     
-                    const utf8Text = forge.util.encodeUtf8(text);
-                    const encrypted = pubKey.encrypt(utf8Text, 'RSA-OAEP');
-                    const b64 = forge.util.encode64(encrypted);
+                    const encrypted = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP'));
                     
                     await fetch('/send', { 
                         method: 'POST', 
                         headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: b64})
+                        body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: encrypted})
                     });
                 } else if(activeGroup) {
                     await fetch('/send-group', { 
@@ -197,30 +194,34 @@
                     });
                 }
                 input.value = '';
-            } catch(e) { alert("Security Error: Target needs to login."); }
+            } catch(e) { alert("Key Mismatch: Target terminal has reset."); }
         }
 
         async function syncAll() {
             if(!currentUser) return;
+
+            // 1. Inbox Update (آخر رسالة من كل شخص)
             try {
                 const inboxRes = await fetch(`/messages/${currentUser.username}`);
                 const inboxMsgs = await inboxRes.json();
                 const lastMsgs = {};
                 inboxMsgs.forEach(m => {
-                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 Secure Packet Received";
+                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 RSA Secure Transmission";
                 });
                 document.getElementById('inbox-list').innerHTML = Object.keys(lastMsgs).map(s => `
-                    <div onmousedown="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 group hover:bg-cyber/10 transition-all">
+                    <div onmousedown="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 group hover:bg-cyber/5 transition-all">
                         <div class="notification-dot"></div>
                         <p class="text-[10px] font-black uppercase text-cyber">@${s}</p>
                         <p class="text-[9px] opacity-60 truncate">${lastMsgs[s]}</p>
                     </div>`).join('');
             } catch(e) {}
 
+            // 2. Chat View (الهيستوري كامل)
             if(!targetUser && !activeGroup) return;
             const endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
             const res = await fetch(endpoint);
             const msgs = await res.json();
+            
             if (msgs.length === lastMsgCount && lastMsgCount !== 0) return;
             lastMsgCount = msgs.length;
 
@@ -229,17 +230,32 @@
             msgs.forEach(m => {
                 let displayMsg = m.message;
                 if(targetUser && m.sender !== currentUser.username) {
-                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error]</span>";
+                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Failure: Key Sync Required]</span>";
                 }
                 const isMe = m.sender === currentUser.username;
                 area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                    <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5">
-                        <b class="text-[9px] opacity-50 block">${m.sender}</b>
+                    <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5 max-w-[80%]">
+                        <b class="text-[9px] opacity-50 block mb-1 uppercase">${m.sender}</b>
                         <span>${displayMsg}</span>
-                        ${isMe ? `<div class="mt-2 text-right"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
+                        ${isMe ? `<div class="mt-2 text-right border-t border-white/10 pt-1"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
                     </div></div>`;
             });
             area.scrollTop = area.scrollHeight;
+        }
+
+        async function editMsg(msgId) {
+            const newVal = prompt("Rewrite Packet Content:");
+            if(newVal) {
+                await fetch('/edit-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, newVal, sender: currentUser.username})});
+                lastMsgCount = 0;
+            }
+        }
+
+        async function deleteMsg(msgId) {
+            if(confirm("Terminate Packet Data?")) {
+                await fetch('/delete-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, sender: currentUser.username})});
+                lastMsgCount = 0;
+            }
         }
 
         async function openMemberManager() {
@@ -247,22 +263,22 @@
             const groups = await res.json();
             const members = groups[activeGroup.groupId].members;
             const list = Object.keys(members).join('\n');
-            const toRemove = prompt(`ACTIVE AGENTS:\n${list}\n\nEnter ID to EVICT (Admin only):`);
+            const toRemove = prompt(`SECTOR AGENTS:\n${list}\n\nEnter @nickname to EVICT (Creator only):`);
             if(toRemove && currentUser.username === activeGroup.creator) {
-                const r = await fetch('/remove-group-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: toRemove.replace('@','')})});
-                if(r.ok) alert("Agent Evicted"); else alert("Action Refused");
+                await fetch('/remove-group-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: toRemove.replace('@','')})});
+                alert("Agent Removed from Sector.");
             }
         }
 
         async function addMemberToGroup() {
-            const h = prompt("Enter Agent @nickname to authorize:");
+            const h = prompt("Authorize Agent @nickname:");
             if(!h) return;
             const r = await fetch('/add-member-by-handle', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({ groupId: activeGroup.groupId, handle: h.replace('@','') }) 
             });
-            if(r.ok) alert("Node Authorized"); else alert("Agent not found in database.");
+            if(r.ok) alert("Node Authorized Successfully."); else alert("Target Node Unreachable.");
         }
 
         async function refreshUsers() { const r = await fetch('/users'); allCachedUsers = await r.json(); }
@@ -271,21 +287,19 @@
             const list = document.getElementById('user-list');
             if(!v) return list.innerHTML = '';
             const filtered = allCachedUsers.filter(u => u.handle.toLowerCase().includes(v) && u.username !== currentUser.username);
-            list.innerHTML = filtered.map(u => `<button onmousedown='setTarget(${JSON.stringify(u)})' class="w-full p-3 mb-1 rounded-xl flex items-center gap-3 hover:bg-cyber/10 text-left active:scale-95 transition-all"><div class="w-8 h-8 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-[10px]">${u.handle[0].toUpperCase()}</div><div class="flex-1"><p class="font-bold text-xs uppercase">@${u.handle}</p></div></button>`).join('');
+            list.innerHTML = filtered.map(u => `<button onmousedown='setTarget(${JSON.stringify(u)})' class="w-full p-3 mb-1 rounded-xl flex items-center gap-3 hover:bg-cyber/10 text-left active:scale-95 transition-all"><div class="w-8 h-8 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-[10px] shadow-inner">${u.handle[0].toUpperCase()}</div><div class="flex-1"><p class="font-bold text-xs uppercase tracking-tighter">@${u.handle}</p></div></button>`).join('');
         }
-        function setTarget(user) { targetUser = user; activeGroup = null; lastMsgCount = 0; document.getElementById('current-chat-name').innerText = "@" + user.handle; document.getElementById('target-avatar').innerText = user.handle[0].toUpperCase(); document.getElementById('chat-status').innerText = "RSA Tunnel Active"; document.getElementById('msg-area').innerHTML = ''; document.getElementById('add-mem-btn').classList.add('hidden'); document.getElementById('manage-mem-btn').classList.add('hidden'); document.getElementById('delete-group-btn').classList.add('hidden'); }
+        function setTarget(user) { targetUser = user; activeGroup = null; lastMsgCount = 0; document.getElementById('current-chat-name').innerText = "@" + user.handle; document.getElementById('target-avatar').innerText = user.handle[0].toUpperCase(); document.getElementById('chat-status').innerText = "RSA Tunnel Established"; document.getElementById('msg-area').innerHTML = ''; document.getElementById('add-mem-btn').classList.add('hidden'); document.getElementById('manage-mem-btn').classList.add('hidden'); document.getElementById('delete-group-btn').classList.add('hidden'); }
         function openFromInbox(h) { const u = allCachedUsers.find(x => x.username === h || x.handle === h); if(u) setTarget(u); }
-        async function editMsg(msgId) { const n = prompt("Edit:"); if(n) await fetch('/edit-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, newVal: n, sender: currentUser.username})}); lastMsgCount = 0; }
-        async function deleteMsg(msgId) { if(confirm("Delete?")) await fetch('/delete-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, sender: currentUser.username})}); lastMsgCount = 0; }
         function logout() { location.reload(); }
-        function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Registration'; }
+        function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Agent Authorization' : 'Security Terminal'; }
         function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
-        async function saveHandle() { const h = document.getElementById('new-handle').value.trim().toLowerCase(); await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})}); currentUser.handle = h; localStorage.setItem('cyber_session', JSON.stringify(currentUser)); startChat(); }
-        async function resetPass() { const u = prompt("ID:"), p = prompt("NEW:"); await fetch('/reset-password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:p})}); }
-        async function createGroup() { const n = prompt("Group Name:"); if(n) await fetch('/create-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupName: n, creator: currentUser.username})}); loadGroups(); }
+        async function saveHandle() { const h = document.getElementById('new-handle').value.trim().toLowerCase(); await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})}); currentUser.handle = h; startChat(); }
+        async function resetPass() { const u = prompt("Agent ID:"), p = prompt("New Cipher:"); await fetch('/reset-password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:p})}); }
+        async function createGroup() { const n = prompt("Sector Name:"); if(n) await fetch('/create-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupName: n, creator: currentUser.username})}); loadGroups(); }
         async function loadGroups() { const r = await fetch(`/my-groups/${currentUser.username}`); const g = await r.json(); document.getElementById('group-list').innerHTML = Object.keys(g).map(id => `<button onmousedown="setGroup('${id}', '${g[id].name}', '${g[id].creator}')" class="w-full p-3 glass rounded-xl text-[10px] font-black uppercase text-cyber border-l-4 border-cyber/40 text-left mb-1 hover:bg-cyber/5 transition-all"># ${g[id].name}</button>`).join(''); }
         function setGroup(id, n, c) { activeGroup = {groupId: id, name: n, creator: c}; targetUser = null; lastMsgCount = 0; document.getElementById('current-chat-name').innerText = n; document.getElementById('add-mem-btn').classList.remove('hidden'); document.getElementById('manage-mem-btn').classList.remove('hidden'); if(c === currentUser.username) document.getElementById('delete-group-btn').classList.remove('hidden'); else document.getElementById('delete-group-btn').classList.add('hidden'); document.getElementById('msg-area').innerHTML = ''; }
-        async function deleteActiveGroup() { if(confirm("Terminate Group?")) await fetch('/delete-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: currentUser.username})}); activeGroup = null; loadGroups(); document.getElementById('msg-area').innerHTML = ''; }
+        async function deleteActiveGroup() { if(confirm("Terminate Secure Sector?")) await fetch('/delete-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: currentUser.username})}); activeGroup = null; loadGroups(); document.getElementById('msg-area').innerHTML = ''; }
     </script>
 </body>
 </html>
