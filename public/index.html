@@ -105,32 +105,31 @@
         function initKeys(username) {
             const pair = pki.rsa.generateKeyPair(1024);
             myPrivKey = pair.privateKey;
-            myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
+            myPubKeyPem = pki.publicKeyToPem(pair.publicKey).trim();
         }
 
-        // تنظيف Base64 قبل atob
-        function safeAtob(str) {
+        // تنظيف قوي جداً للـ Base64 + PEM
+        function safeBase64Decode(b64) {
             try {
-                // إضافة padding لو ناقص
-                str = str.replace(/[^A-Za-z0-9+/=]/g, '');
-                const padding = str.length % 4;
-                if (padding) str += '='.repeat(4 - padding);
-                return atob(str);
+                let cleaned = b64.replace(/[^A-Za-z0-9+/=]/g, '').trim();
+                const pad = cleaned.length % 4;
+                if (pad) cleaned += '='.repeat(4 - pad);
+                return atob(cleaned);
             } catch (e) {
-                console.error("safeAtob failed for:", str.substring(0, 50));
-                throw new Error("Invalid base64 key from server");
+                console.error("Base64 decode failed. Raw:", b64.substring(0, 100));
+                throw new Error("Invalid key from server");
             }
         }
 
         function secureDecrypt(cipherTextB64) {
             if (!myPrivKey) return null;
             try {
-                const encryptedBytes = forge.util.decode64(cipherTextB64);
-                const decrypted = myPrivKey.decrypt(encryptedBytes, 'RSA-OAEP');
+                const bytes = forge.util.decode64(cipherTextB64);
+                const decrypted = myPrivKey.decrypt(bytes, 'RSA-OAEP');
                 return forge.util.decodeUtf8(decrypted);
             } catch (e) {
                 console.error("Decryption failed:", e.message);
-                return "🔒 Decryption Error - Padding mismatch";
+                return "🔒 Decryption Error";
             }
         }
 
@@ -143,7 +142,7 @@
             const res = await fetch(isLogin ? '/login' : '/register', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username:u, password:p, publicKey: btoa(myPubKeyPem)})
+                body: JSON.stringify({username: u, password: p, publicKey: btoa(myPubKeyPem)})
             });
             const data = await res.json();
             if(res.ok) {
@@ -183,9 +182,11 @@
                     const freshTarget = users.find(u => u.username === targetUser.username);
                     if (!freshTarget?.publicKey) throw new Error("Target public key not found");
 
-                    // تنظيف الـ public key قبل atob
-                    const cleanPem = safeAtob(freshTarget.publicKey);
-                    const pubKey = pki.publicKeyFromPem(cleanPem);
+                    // تنظيف قوي للـ PEM
+                    const pemString = safeBase64Decode(freshTarget.publicKey);
+                    console.log("PEM length after clean:", pemString.length);
+
+                    const pubKey = pki.publicKeyFromPem(pemString);
 
                     const encryptedBytes = pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP');
                     const encryptedB64 = forge.util.encode64(encryptedBytes);
@@ -211,7 +212,7 @@
                 input.value = '';
             } catch(e) {
                 console.error("Send Error:", e.message);
-                alert("Failed to send: " + e.message + "\nCheck console for details.");
+                alert("Send failed: " + e.message);
             }
         }
 
@@ -222,9 +223,7 @@
                 const inboxMsgs = await inboxRes.json();
                 const lastMsgs = {};
                 inboxMsgs.forEach(m => {
-                    if(!lastMsgs[m.sender]) {
-                        lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 Encrypted Packet";
-                    }
+                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 Encrypted";
                 });
                 document.getElementById('inbox-list').innerHTML = Object.keys(lastMsgs).map(s => `
                     <div onmousedown="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 group hover:bg-cyber/5 transition-all">
@@ -234,9 +233,7 @@
                     </div>`).join('');
 
                 if(!targetUser && !activeGroup) return;
-                const endpoint = targetUser 
-                    ? `/messages-full/${currentUser.username}/${targetUser.username}` 
-                    : `/group-messages/${activeGroup.groupId}`;
+                const endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
                 const res = await fetch(endpoint);
                 const msgs = await res.json();
 
@@ -262,7 +259,7 @@
             } catch(e) { console.error(e); }
         }
 
-        // باقي الدوال بدون تغيير
+        // باقي الدوال (نفسها)
         async function editMsg(msgId) {
             const newVal = prompt("Rewrite Packet Content:");
             if(newVal) {
