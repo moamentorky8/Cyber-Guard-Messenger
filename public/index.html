@@ -60,7 +60,6 @@
                 <div id="user-list" class="space-y-2 overflow-y-auto mb-4 border-b border-white/5 pb-2 max-h-[150px]"></div>
                 <h3 class="text-[10px] font-black text-cyber uppercase tracking-[0.3em] mb-4 text-center">Inbound Packets</h3>
                 <div id="inbox-list" class="flex-1 space-y-2 overflow-y-auto pr-2"></div>
-               
                 <div class="mt-4 border-t border-white/10 pt-4">
                     <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase">
                         <span>Secure Sectors</span>
@@ -92,6 +91,7 @@
             </div>
         </div>
     </main>
+
     <script>
         let isLogin = true, currentUser = null, targetUser = null, activeGroup = null, lastMsgCount = 0, allCachedUsers = [];
         let myPrivKey = null, myPubKeyPem = null;
@@ -108,19 +108,21 @@
             myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
         }
 
-        // ====================== التعديل الجديد هنا ======================
+        // فك التشفير المُحسّن (النسخة النهائية)
         function secureDecrypt(cipherTextB64) {
             if (!myPrivKey) return null;
             try {
                 const encryptedBytes = forge.util.decode64(cipherTextB64);
-                const decrypted = myPrivKey.decrypt(encryptedBytes, 'RSA-OAEP');
+                const decrypted = myPrivKey.decrypt(encryptedBytes, 'RSA-OAEP', {
+                    md: forge.md.sha1.create(),
+                    mgf1: { md: forge.md.sha1.create() }
+                });
                 return forge.util.decodeUtf8(decrypted);
             } catch (e) {
-                console.error("Decryption failed:", e);
-                return "🔒 Decryption Error (Key mismatch or corrupted packet)";
+                console.error("Decryption failed:", e.message);
+                return "🔒 Decryption Error - Key mismatch";
             }
         }
-        // ================================================================
 
         async function handleAuth() {
             const u = document.getElementById('username').value.trim().toLowerCase();
@@ -138,7 +140,7 @@
                 currentUser = data;
                 localStorage.setItem('cyber_session', JSON.stringify(data));
                 if(!isLogin || !data.handle) showSetup(); else startChat();
-            } else alert(data.error);
+            } else alert(data.error || "Auth failed");
         }
 
         async function startChat() {
@@ -159,29 +161,41 @@
             refreshUsers(); loadGroups();
         }
 
+        // إرسال الرسالة المُحسّن (النسخة النهائية)
         async function dispatchMessage() {
-            const input = document.getElementById('msg-input'), text = input.value.trim();
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
             if(!text) return;
+
             try {
                 if(targetUser) {
-                    const userCheck = await fetch('/users');
-                    const users = await userCheck.json();
+                    const usersRes = await fetch('/users');
+                    const users = await usersRes.json();
                     const freshTarget = users.find(u => u.username === targetUser.username);
-                    let pubKeySource = freshTarget ? freshTarget.publicKey : targetUser.publicKey;
-                   
-                    let cleanPubKeyPem = atob(pubKeySource);
-                    const pubKey = pki.publicKeyFromPem(cleanPubKeyPem);
-                   
-                    // ====================== التعديل الجديد هنا ======================
-                    const encryptedBytes = pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP');
-                    const encrypted = forge.util.encode64(encryptedBytes);
-                    // ================================================================
+                    if (!freshTarget?.publicKey) throw new Error("Target public key not found");
+
+                    // تنظيف الـ public key
+                    let pem = atob(freshTarget.publicKey);
+                    const pubKey = pki.publicKeyFromPem(pem);
+
+                    // تشفير مع OAEP + SHA1 (متوافق مع الـ decrypt)
+                    const encryptedBytes = pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP', {
+                        md: forge.md.sha1.create(),
+                        mgf1: { md: forge.md.sha1.create() }
+                    });
+                    const encryptedB64 = forge.util.encode64(encryptedBytes);
 
                     await fetch('/send', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({sender: currentUser.username, receiver: targetUser.username, message: encrypted})
+                        body: JSON.stringify({
+                            sender: currentUser.username,
+                            receiver: targetUser.username,
+                            message: encryptedB64
+                        })
                     });
+
+                    console.log("✅ Message sent successfully");
                 } else if(activeGroup) {
                     await fetch('/send-group', {
                         method: 'POST',
@@ -190,20 +204,23 @@
                     });
                 }
                 input.value = '';
-            } catch(e) { 
-                console.error(e); 
-                alert("Key Mismatch: Target terminal has reset."); 
+            } catch(e) {
+                console.error("Send Error:", e);
+                alert("Failed to send message.\nCheck console (F12) for details.");
             }
         }
 
         async function syncAll() {
             if(!currentUser) return;
             try {
+                // Inbox
                 const inboxRes = await fetch(`/messages/${currentUser.username}`);
                 const inboxMsgs = await inboxRes.json();
                 const lastMsgs = {};
                 inboxMsgs.forEach(m => {
-                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 RSA Secure Packet";
+                    if(!lastMsgs[m.sender]) {
+                        lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 Encrypted Packet";
+                    }
                 });
                 document.getElementById('inbox-list').innerHTML = Object.keys(lastMsgs).map(s => `
                     <div onmousedown="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 group hover:bg-cyber/5 transition-all">
@@ -211,33 +228,38 @@
                         <p class="text-[10px] font-black uppercase text-cyber">@${s}</p>
                         <p class="text-[9px] opacity-60 truncate">${lastMsgs[s]}</p>
                     </div>`).join('');
-            } catch(e) {}
 
-            if(!targetUser && !activeGroup) return;
-            const endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
-            const res = await fetch(endpoint);
-            const msgs = await res.json();
-           
-            if (msgs.length === lastMsgCount && lastMsgCount !== 0) return;
-            lastMsgCount = msgs.length;
-            const area = document.getElementById('msg-area');
-            area.innerHTML = '';
-            msgs.forEach(m => {
-                let displayMsg = m.message;
-                if(targetUser && m.sender !== currentUser.username) {
-                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error: Key mismatch on this packet]</span>";
-                }
-                const isMe = m.sender === currentUser.username;
-                area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                    <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5 max-w-[80%]">
-                        <b class="text-[9px] opacity-50 block mb-1 uppercase">${m.sender}</b>
-                        <span>${displayMsg}</span>
-                        ${isMe ? `<div class="mt-2 text-right border-t border-white/10 pt-1"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
-                    </div></div>`;
-            });
-            area.scrollTop = area.scrollHeight;
+                // Chat area
+                if(!targetUser && !activeGroup) return;
+                const endpoint = targetUser 
+                    ? `/messages-full/${currentUser.username}/${targetUser.username}` 
+                    : `/group-messages/${activeGroup.groupId}`;
+                const res = await fetch(endpoint);
+                const msgs = await res.json();
+
+                if (msgs.length === lastMsgCount && lastMsgCount !== 0) return;
+                lastMsgCount = msgs.length;
+
+                const area = document.getElementById('msg-area');
+                area.innerHTML = '';
+                msgs.forEach(m => {
+                    let displayMsg = m.message;
+                    if(targetUser && m.sender !== currentUser.username) {
+                        displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error]</span>";
+                    }
+                    const isMe = m.sender === currentUser.username;
+                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
+                        <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5 max-w-[80%]">
+                            <b class="text-[9px] opacity-50 block mb-1 uppercase">${m.sender}</b>
+                            <span>${displayMsg}</span>
+                            ${isMe ? `<div class="mt-2 text-right border-t border-white/10 pt-1"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
+                        </div></div>`;
+                });
+                area.scrollTop = area.scrollHeight;
+            } catch(e) { console.error(e); }
         }
 
+        // باقي الدوال (بدون تغيير)
         async function editMsg(msgId) {
             const newVal = prompt("Rewrite Packet Content:");
             if(newVal) {
