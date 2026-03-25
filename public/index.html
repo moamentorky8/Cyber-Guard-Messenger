@@ -104,13 +104,14 @@
         let myPrivKey = null, myPubKeyPem = null;
         const pki = forge.pki;
 
-        // ميزة الـ Logout عند الريفريش لضمان تجديد المفاتيح والأمان
+        // تنظيف المتصفح عند الريفريش لضمان سلامة الجلسة
         window.onload = function() {
             localStorage.removeItem('cyber_session');
             console.log("Terminal Purged. Session Reset.");
         };
 
         function initKeys(username) {
+            // توليد المفاتيح
             const pair = pki.rsa.generateKeyPair(1024);
             myPrivKey = pair.privateKey;
             myPubKeyPem = pki.publicKeyToPem(pair.publicKey);
@@ -120,6 +121,7 @@
             if(!myPrivKey) return null;
             try {
                 const encryptedBytes = forge.util.decode64(cipherTextB64);
+                // استخدام RSA-OAEP وفك الترميز UTF-8
                 const decrypted = myPrivKey.decrypt(encryptedBytes, 'RSA-OAEP');
                 return forge.util.decodeUtf8(decrypted);
             } catch (e) { return null; }
@@ -130,12 +132,13 @@
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("System Warning: Credentials Missing");
             
-            initKeys(u); // توليد طقم مفاتيح RSA جديد
+            initKeys(u); 
 
             const res = await fetch(isLogin ? '/login' : '/register', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({username:u, password:p, publicKey: myPubKeyPem}) 
+                // إرسال المفتاح مشفر Base64 لضمان سلامة الـ Format
+                body: JSON.stringify({username:u, password:p, publicKey: btoa(myPubKeyPem)}) 
             });
             const data = await res.json();
             if(res.ok) { 
@@ -153,14 +156,14 @@
             document.getElementById('logout-btn').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (currentUser.handle || currentUser.username);
 
-            // مزامنة فورية للمفتاح الجديد مع السيرفر
+            // مزامنة المفتاح الجديد (Base64)
             await fetch('/update-key', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({username: currentUser.username, publicKey: myPubKeyPem}) 
+                body: JSON.stringify({username: currentUser.username, publicKey: btoa(myPubKeyPem)}) 
             });
 
-            setInterval(syncAll, 1500); // سرعة تحديث 1.5 ثانية كما في النظام القديم
+            setInterval(syncAll, 1500);
             setInterval(refreshUsers, 5000);
             refreshUsers(); loadGroups();
         }
@@ -170,15 +173,16 @@
             if(!text) return;
             try {
                 if(targetUser) {
-                    // Force Sync للمفتاح قبل الإرسال (حل مشكلة التشفير الجذري)
                     const userCheck = await fetch('/users');
                     const users = await userCheck.json();
                     const freshTarget = users.find(u => u.username === targetUser.username);
                     let pubKeySource = freshTarget ? freshTarget.publicKey : targetUser.publicKey;
                     
-                    let cleanPubKey = pubKeySource.replace(/\\n/g, '\n').trim();
-                    const pubKey = pki.publicKeyFromPem(cleanPubKey);
+                    // فك الـ Base64 لترجع بصيغة PEM السليمة
+                    let cleanPubKeyPem = atob(pubKeySource);
+                    const pubKey = pki.publicKeyFromPem(cleanPubKeyPem);
                     
+                    // تشفير UTF-8 باستخدام RSA-OAEP
                     const encrypted = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP'));
                     
                     await fetch('/send', { 
@@ -194,19 +198,18 @@
                     });
                 }
                 input.value = '';
-            } catch(e) { alert("Key Mismatch: Target terminal has reset."); }
+            } catch(e) { console.error(e); alert("Key Mismatch: Target terminal has reset."); }
         }
 
         async function syncAll() {
             if(!currentUser) return;
 
-            // 1. Inbox Update (آخر رسالة من كل شخص)
             try {
                 const inboxRes = await fetch(`/messages/${currentUser.username}`);
                 const inboxMsgs = await inboxRes.json();
                 const lastMsgs = {};
                 inboxMsgs.forEach(m => {
-                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 RSA Secure Transmission";
+                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 RSA Secure Packet";
                 });
                 document.getElementById('inbox-list').innerHTML = Object.keys(lastMsgs).map(s => `
                     <div onmousedown="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 group hover:bg-cyber/5 transition-all">
@@ -216,7 +219,6 @@
                     </div>`).join('');
             } catch(e) {}
 
-            // 2. Chat View (الهيستوري كامل)
             if(!targetUser && !activeGroup) return;
             const endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
             const res = await fetch(endpoint);
@@ -230,7 +232,7 @@
             msgs.forEach(m => {
                 let displayMsg = m.message;
                 if(targetUser && m.sender !== currentUser.username) {
-                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Failure: Key Sync Required]</span>";
+                    displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error: Key mismatch on this packet]</span>";
                 }
                 const isMe = m.sender === currentUser.username;
                 area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
@@ -266,7 +268,7 @@
             const toRemove = prompt(`SECTOR AGENTS:\n${list}\n\nEnter @nickname to EVICT (Creator only):`);
             if(toRemove && currentUser.username === activeGroup.creator) {
                 await fetch('/remove-group-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: toRemove.replace('@','')})});
-                alert("Agent Removed from Sector.");
+                alert("Agent Removed.");
             }
         }
 
@@ -278,7 +280,7 @@
                 headers: {'Content-Type': 'application/json'}, 
                 body: JSON.stringify({ groupId: activeGroup.groupId, handle: h.replace('@','') }) 
             });
-            if(r.ok) alert("Node Authorized Successfully."); else alert("Target Node Unreachable.");
+            if(r.ok) alert("Node Authorized."); else alert("Target Unreachable.");
         }
 
         async function refreshUsers() { const r = await fetch('/users'); allCachedUsers = await r.json(); }
