@@ -1,366 +1,224 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
+    <title>CYBER TERMINAL V4 | COMPLETE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { cyber: '#06b6d4' } } } }
-    </script>
     <style>
-        body { font-family: 'Inter', sans-serif; background: #020617; color: white; user-select: none !important; }
-        .glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
-        .chat-area::-webkit-scrollbar { width: 4px; }
-        .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
-        .animate-slide-up { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-opacity text-[10px] ml-2 cursor-pointer inline-block bg-white/5 px-2 py-0.5 rounded hover:bg-white/20; }
-        .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
+        body { background: #020617; color: white; font-family: monospace; }
+        .glass { background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(6, 182, 212, 0.2); backdrop-filter: blur(10px); }
+        .cyber-txt { color: #06b6d4; text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
+        .chat-area::-webkit-scrollbar { width: 3px; }
+        .chat-area::-webkit-scrollbar-thumb { background: #06b6d4; }
     </style>
 </head>
-<body class="min-h-screen p-4">
-    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg rounded-2xl mb-6">
-        <div class="flex flex-col">
-            <h1 class="text-xl font-black tracking-tighter text-cyber uppercase italic font-mono">Cyber Messenger</h1>
-            <p class="text-[10px] font-bold opacity-60 tracking-widest uppercase">By: Moamen Abdelfattah</p>
+<body class="h-screen p-4 flex flex-col">
+
+    <div id="auth-ui" class="max-w-md mx-auto mt-20 w-full glass p-8 rounded-3xl border-t-4 border-cyan-500">
+        <h1 class="text-2xl font-black cyber-txt italic mb-8 uppercase tracking-widest text-center">Authorization</h1>
+        <div class="space-y-4">
+            <input type="text" id="u" placeholder="AGENT_ID" class="w-full bg-black/50 border border-white/10 p-4 rounded-xl outline-none focus:border-cyan-500">
+            <input type="password" id="p" placeholder="CIPHER_PASS" class="w-full bg-black/50 border border-white/10 p-4 rounded-xl outline-none focus:border-cyan-500">
+            <button onclick="auth(true)" class="w-full bg-cyan-500 text-black font-black p-4 rounded-xl hover:scale-95 transition">LOGIN_NODE</button>
+            <button onclick="auth(false)" class="w-full text-[10px] opacity-40 uppercase tracking-widest text-center">Initialize_New_Account</button>
         </div>
-        <div class="flex items-center gap-4">
-            <div id="user-badge" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
-                <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
-                <span id="active-user" class="text-xs font-bold tracking-tighter uppercase"></span>
+    </div>
+
+    <div id="chat-ui" class="hidden grid grid-cols-12 gap-4 h-full max-w-7xl mx-auto w-full overflow-hidden">
+        <aside class="col-span-4 glass rounded-3xl p-5 flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="me" class="cyber-txt font-black text-xs uppercase italic"></h2>
+                <button onclick="logout()" class="text-red-500 text-[10px] font-black border border-red-500/20 px-2 py-1 rounded">LOG_OUT</button>
             </div>
-            <button onclick="logout()" id="logout-btn" class="hidden bg-red-500/20 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition">Logout</button>
-        </div>
-    </nav>
-    <main class="max-w-6xl mx-auto">
-        <section id="auth-section" class="max-w-md mx-auto mt-12 glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber animate-slide-up">
-            <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase italic text-cyber">Security Terminal</h2>
-            <div class="space-y-4">
-                <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
-                <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
-                <button onclick="handleAuth()" id="btn-main" class="w-full bg-cyber text-white p-4 rounded-xl font-black uppercase text-xs">Authorize Access</button>
-                <div class="flex justify-between px-2 text-[10px] font-bold text-slate-500 uppercase">
-                    <button onclick="toggleAuth()" id="toggle-text" class="cursor-pointer hover:text-cyber">Register Node</button>
-                    <button onclick="resetPass()" class="cursor-pointer hover:text-red-400">Reset Pass</button>
+
+            <input type="text" id="search" oninput="ui_drawUsers()" placeholder="Search Nodes..." class="w-full bg-black/40 border border-white/5 p-3 rounded-xl text-[10px] mb-4 outline-none focus:border-cyan-500">
+            
+            <div class="flex-1 overflow-y-auto space-y-4 chat-area">
+                <div>
+                    <p class="text-[9px] font-black cyber-txt uppercase mb-2">Incoming_Packets (Inbox)</p>
+                    <div id="inbox-box" class="space-y-1"></div>
                 </div>
-            </div>
-        </section>
-        <section id="setup-section" class="hidden max-w-md mx-auto mt-12 glass p-8 rounded-[2rem] border-t-4 border-green-500 animate-slide-up">
-            <h2 class="text-center text-2xl font-black mb-4 uppercase text-green-500 italic">Identity Setup</h2>
-            <input type="text" id="new-handle" placeholder="@nickname" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none mb-4">
-            <button onclick="saveHandle()" class="w-full bg-green-500 text-white p-4 rounded-xl font-black uppercase text-xs">Confirm Identity</button>
-        </section>
-        <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 h-[78vh] animate-slide-up">
-            <aside class="lg:col-span-4 glass rounded-[2rem] p-6 flex flex-col overflow-hidden">
-                <h3 class="text-[10px] font-black opacity-40 uppercase tracking-[0.3em] mb-4">Nodes Scan</h3>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search handle..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber">
-                <div id="user-list" class="space-y-2 overflow-y-auto mb-4 border-b border-white/5 pb-2 max-h-[150px]"></div>
-                <h3 class="text-[10px] font-black text-cyber uppercase tracking-[0.3em] mb-4 text-center">Inbound Packets</h3>
-                <div id="inbox-list" class="flex-1 space-y-2 overflow-y-auto pr-2"></div>
-                <div class="mt-4 border-t border-white/10 pt-4">
-                    <div class="flex justify-between items-center mb-4 text-[10px] font-black opacity-40 uppercase">
-                        <span>Secure Sectors</span>
-                        <button onclick="createGroup()" class="text-cyber hover:underline font-bold">+ New</button>
-                    </div>
-                    <div id="group-list" class="space-y-2 overflow-y-auto max-h-[120px]"></div>
+                <div>
+                    <p class="text-[9px] font-black opacity-30 uppercase mb-2 italic">Active_Nodes</p>
+                    <div id="user-box" class="space-y-1"></div>
                 </div>
-            </aside>
-            <div class="lg:col-span-8 glass rounded-[2rem] flex flex-col overflow-hidden relative">
-                <div id="chat-header" class="p-5 border-b border-white/10 flex items-center justify-between bg-white/5">
-                    <div class="flex items-center gap-3">
-                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-cyber uppercase text-xs shadow-inner">?</div>
-                        <div>
-                            <h3 id="current-chat-name" class="font-bold text-sm uppercase">Select Node</h3>
-                            <p id="chat-status" class="text-[9px] opacity-40 uppercase font-black">Offline</p>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <button id="manage-mem-btn" onclick="openMemberManager()" class="hidden bg-cyber/10 text-cyber text-[9px] px-3 py-2 rounded-full font-black uppercase border border-cyber/20">Manage</button>
-                        <button id="add-mem-btn" onclick="addMemberToGroup()" class="hidden bg-green-500/10 text-green-500 text-[9px] px-3 py-2 rounded-full font-black uppercase">+ Add</button>
-                        <button id="delete-group-btn" onclick="deleteActiveGroup()" class="hidden bg-red-500/10 text-red-500 text-[9px] px-3 py-2 rounded-full font-black uppercase">Destroy</button>
-                    </div>
-                </div>
-                <div id="msg-area" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-50/50 dark:bg-transparent"></div>
-                <div class="p-4 bg-white/5 border-t border-white/10 flex gap-3">
-                    <input type="text" id="msg-input" placeholder="Type secure message..." class="flex-1 bg-slate-950 rounded-2xl p-4 text-sm outline-none focus:ring-1 focus:ring-cyber">
-                    <button onclick="dispatchMessage()" class="bg-cyber p-4 rounded-2xl text-white shadow-xl hover:scale-105 active:scale-90 transition-all font-black uppercase text-xs">Send</button>
+                <div>
+                    <div class="flex justify-between"><p class="text-[9px] font-black opacity-30 uppercase mb-2 italic">Sectors (Groups)</p><button onclick="createGroup()" class="text-[8px] text-cyan-500">+NEW</button></div>
+                    <div id="group-box" class="space-y-1"></div>
                 </div>
             </div>
-        </div>
-    </main>
+        </aside>
+
+        <main class="col-span-8 glass rounded-3xl flex flex-col overflow-hidden relative">
+            <div class="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div id="t-avatar" class="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-500 font-black">?</div>
+                    <div><h3 id="t-name" class="font-black text-xs uppercase italic">Select_Target</h3><p id="t-status" class="text-[8px] opacity-40">ENCRYPTED_IDLE</p></div>
+                </div>
+                <div id="g-tools" class="hidden flex gap-2">
+                    <button onclick="addGroupMember()" class="text-[8px] bg-cyan-500 text-black px-2 py-1 rounded">ADD_MEMBER</button>
+                    <button onclick="deleteGroup()" class="text-[8px] bg-red-500 text-white px-2 py-1 rounded">DESTROY</button>
+                </div>
+            </div>
+
+            <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area"></div>
+
+            <div class="p-4 bg-black/40 flex gap-2">
+                <input type="text" id="m-in" placeholder="Enter encrypted packet..." class="flex-1 bg-transparent outline-none text-[11px] px-2">
+                <button onclick="send()" class="bg-cyan-500 text-black px-6 py-2 rounded-xl font-black text-[10px]">SEND</button>
+            </div>
+        </main>
+    </div>
 
     <script>
-        let isLogin = true, currentUser = null, targetUser = null, activeGroup = null, lastMsgCount = 0, allCachedUsers = [];
-        let myPrivKey = null, myPubKeyPem = null;
+        let me = null, target = null, gActive = null, myPriv = null, lastLen = 0, usersRaw = [];
         const pki = forge.pki;
 
-        window.onload = function() {
-            localStorage.removeItem('cyber_session');
-            console.log("Terminal Purged. Session Reset.");
-        };
+        async function auth(isLogin) {
+            const u = document.getElementById('u').value.trim().toLowerCase();
+            const p = document.getElementById('p').value.trim();
+            if(!u || !p) return;
 
-        function initKeys(username) {
-            const pair = pki.rsa.generateKeyPair(1024);
-            myPrivKey = pair.privateKey;
-            myPubKeyPem = pki.publicKeyToPem(pair.publicKey).trim();
-        }
-
-        // تنظيف قوي جداً للـ Base64 + PEM
-        function safeBase64Decode(b64) {
-            try {
-                let cleaned = b64.replace(/[^A-Za-z0-9+/=]/g, '').trim();
-                const pad = cleaned.length % 4;
-                if (pad) cleaned += '='.repeat(4 - pad);
-                return atob(cleaned);
-            } catch (e) {
-                console.error("Base64 decode failed. Raw:", b64.substring(0, 100));
-                throw new Error("Invalid key from server");
+            let storedPriv = localStorage.getItem(`priv_v4_${u}`);
+            let storedPub = localStorage.getItem(`pub_v4_${u}`);
+            if(!storedPriv) {
+                const pair = pki.rsa.generateKeyPair(1024);
+                storedPriv = pki.privateKeyToPem(pair.privateKey);
+                storedPub = pki.publicKeyToPem(pair.publicKey);
+                localStorage.setItem(`priv_v4_${u}`, storedPriv);
+                localStorage.setItem(`pub_v4_${u}`, storedPub);
             }
-        }
+            myPriv = pki.privateKeyFromPem(storedPriv);
 
-        function secureDecrypt(cipherTextB64) {
-            if (!myPrivKey) return null;
-            try {
-                const bytes = forge.util.decode64(cipherTextB64);
-                const decrypted = myPrivKey.decrypt(bytes, 'RSA-OAEP');
-                return forge.util.decodeUtf8(decrypted);
-            } catch (e) {
-                console.error("Decryption failed:", e.message);
-                return "🔒 Decryption Error";
-            }
-        }
-
-        async function handleAuth() {
-            const u = document.getElementById('username').value.trim().toLowerCase();
-            const p = document.getElementById('password').value.trim();
-            if(!u || !p) return alert("System Warning: Credentials Missing");
-           
-            initKeys(u);
-            const res = await fetch(isLogin ? '/login' : '/register', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: u, password: p, publicKey: btoa(myPubKeyPem)})
+            const res = await fetch('/auth', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username: u, password: p, publicKey: btoa(storedPub), isLogin})
             });
             const data = await res.json();
             if(res.ok) {
-                currentUser = data;
-                localStorage.setItem('cyber_session', JSON.stringify(data));
-                if(!isLogin || !data.handle) showSetup(); else startChat();
-            } else alert(data.error || "Auth failed");
+                if(!isLogin) return alert("System_Initialized.");
+                me = { username: u };
+                document.getElementById('auth-ui').classList.add('hidden');
+                document.getElementById('chat-ui').classList.remove('hidden');
+                document.getElementById('me').innerText = "@" + u;
+                initLoop();
+            } else alert(data.error);
         }
 
-        async function startChat() {
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('setup-section').classList.add('hidden');
-            document.getElementById('chat-section').classList.remove('hidden');
-            document.getElementById('user-badge').classList.remove('hidden');
-            document.getElementById('logout-btn').classList.remove('hidden');
-            document.getElementById('active-user').innerText = "@" + (currentUser.handle || currentUser.username);
-            
-            await fetch('/update-key', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({username: currentUser.username, publicKey: btoa(myPubKeyPem)})
-            });
-            setInterval(syncAll, 1500);
-            setInterval(refreshUsers, 5000);
-            refreshUsers(); loadGroups();
+        function initLoop() {
+            setInterval(sync, 2000);
+            fetchUsers(); ui_loadGroups();
         }
 
-        async function dispatchMessage() {
-            const input = document.getElementById('msg-input');
-            const text = input.value.trim();
-            if(!text) return;
+        async function fetchUsers() {
+            const res = await fetch('/users');
+            usersRaw = await res.json();
+            ui_drawUsers();
+        }
 
+        function ui_drawUsers() {
+            const q = document.getElementById('search').value.toLowerCase();
+            const container = document.getElementById('user-box');
+            const filtered = usersRaw.filter(u => u.username.includes(q) && u.username !== me.username);
+            container.innerHTML = filtered.map(u => `
+                <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyan-500/5 flex justify-between items-center mb-1">
+                    <span class="text-[10px] font-bold">@${u.username}</span>
+                    <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_green]' : 'bg-slate-700'}"></div>
+                </div>`).join('');
+        }
+
+        function setTarget(u) {
+            target = u; gActive = null; lastLen = 0;
+            document.getElementById('t-name').innerText = "@" + u.username;
+            document.getElementById('t-status').innerText = "PRIVATE_SECURE_NODE";
+            document.getElementById('g-tools').classList.add('hidden');
+            document.getElementById('msgs-box').innerHTML = '';
+        }
+
+        async function send() {
+            const input = document.getElementById('m-in'), txt = input.value.trim();
+            if(!txt || (!target && !gActive)) return;
             try {
-                if(targetUser) {
-                    const usersRes = await fetch('/users');
-                    const users = await usersRes.json();
-                    const freshTarget = users.find(u => u.username === targetUser.username);
-                    if (!freshTarget?.publicKey) throw new Error("Target public key not found");
-
-                    // تنظيف قوي للـ PEM
-                    const pemString = safeBase64Decode(freshTarget.publicKey);
-                    console.log("PEM length after clean:", pemString.length);
-
-                    const pubKey = pki.publicKeyFromPem(pemString);
-
-                    const encryptedBytes = pubKey.encrypt(forge.util.encodeUtf8(text), 'RSA-OAEP');
-                    const encryptedB64 = forge.util.encode64(encryptedBytes);
-
-                    await fetch('/send', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            sender: currentUser.username,
-                            receiver: targetUser.username,
-                            message: encryptedB64
-                        })
-                    });
-
-                    console.log("✅ Message sent successfully");
-                } else if(activeGroup) {
-                    await fetch('/send-group', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({groupId: activeGroup.groupId, sender: currentUser.username, message: text})
-                    });
+                let packet = txt;
+                if(target) {
+                    const pubKey = pki.publicKeyFromPem(atob(target.publicKey));
+                    packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 }
+                await fetch('/send', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({sender: me.username, receiver: target ? target.username : gActive.id, message: packet})
+                });
                 input.value = '';
-            } catch(e) {
-                console.error("Send Error:", e.message);
-                alert("Send failed: " + e.message);
-            }
+            } catch (e) { alert("CRYPTO_ERR"); }
         }
 
-        async function syncAll() {
-            if(!currentUser) return;
-            try {
-                const inboxRes = await fetch(`/messages/${currentUser.username}`);
-                const inboxMsgs = await inboxRes.json();
-                const lastMsgs = {};
-                inboxMsgs.forEach(m => {
-                    if(!lastMsgs[m.sender]) lastMsgs[m.sender] = secureDecrypt(m.message) || "🔒 Encrypted";
-                });
-                document.getElementById('inbox-list').innerHTML = Object.keys(lastMsgs).map(s => `
-                    <div onmousedown="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 group hover:bg-cyber/5 transition-all">
-                        <div class="notification-dot"></div>
-                        <p class="text-[10px] font-black uppercase text-cyber">@${s}</p>
-                        <p class="text-[9px] opacity-60 truncate">${lastMsgs[s]}</p>
-                    </div>`).join('');
+        async function sync() {
+            if(!me) return;
+            // Inbox Logic
+            const inboxRes = await fetch(`/inbox/${me.username}`);
+            const inbox = await inboxRes.json();
+            document.getElementById('inbox-box').innerHTML = inbox.map(m => `
+                <div onclick="setTarget({username:'${m.sender}', publicKey:'${usersRaw.find(u=>u.username===m.sender)?.publicKey}'})" class="p-2 glass rounded-lg border-l-2 border-cyan-500 mb-1 cursor-pointer">
+                    <p class="text-[8px] cyber-txt">FROM: @${m.sender}</p>
+                </div>`).join('');
 
-                if(!targetUser && !activeGroup) return;
-                const endpoint = targetUser ? `/messages-full/${currentUser.username}/${targetUser.username}` : `/group-messages/${activeGroup.groupId}`;
-                const res = await fetch(endpoint);
-                const msgs = await res.json();
+            // Chat Sync
+            if(!target && !gActive) return;
+            const res = await fetch(`/msgs/${me.username}/${target ? target.username : gActive.id}`);
+            const msgs = await res.json();
+            if(msgs.length === lastLen) return;
+            lastLen = msgs.length;
 
-                if (msgs.length === lastMsgCount && lastMsgCount !== 0) return;
-                lastMsgCount = msgs.length;
-
-                const area = document.getElementById('msg-area');
-                area.innerHTML = '';
-                msgs.forEach(m => {
-                    let displayMsg = m.message;
-                    if(targetUser && m.sender !== currentUser.username) {
-                        displayMsg = secureDecrypt(m.message) || "<span class='text-red-400'>[Decryption Error]</span>";
-                    }
-                    const isMe = m.sender === currentUser.username;
-                    area.innerHTML += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                        <div class="${isMe ? 'bg-cyber text-white shadow-lg' : 'glass'} p-4 rounded-2xl ${isMe ? 'rounded-tr-none' : 'rounded-tl-none'} text-sm mb-1 relative border border-white/5 max-w-[80%]">
-                            <b class="text-[9px] opacity-50 block mb-1 uppercase">${m.sender}</b>
-                            <span>${displayMsg}</span>
-                            ${isMe ? `<div class="mt-2 text-right border-t border-white/10 pt-1"><span class="msg-btn" onclick="editMsg('${m.id}')">✎ Edit</span><span class="msg-btn text-red-400 ml-2" onclick="deleteMsg('${m.id}')">✖ Void</span></div>` : ''}
-                        </div></div>`;
-                });
-                area.scrollTop = area.scrollHeight;
-            } catch(e) { console.error(e); }
+            const box = document.getElementById('msgs-box');
+            box.innerHTML = msgs.map(m => {
+                let d = m.message;
+                const isMe = m.sender === me.username;
+                if(!isMe && target) {
+                    try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 [ENC_PACKET]"; }
+                }
+                return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} group">
+                    <div class="${isMe ? 'bg-cyan-500 text-black' : 'glass'} p-3 rounded-2xl max-w-[80%] relative">
+                        <p class="text-[7px] uppercase opacity-50 font-black">${m.sender} ${m.edited ? '[EDIT]' : ''}</p>
+                        <p class="text-[11px]">${d}</p>
+                        ${isMe ? `<div class="text-right mt-1 opacity-0 group-hover:opacity-100 transition"><span onclick="ui_edit('${m.id}')" class="cursor-pointer text-[9px] mr-2">✎</span><span onclick="ui_del('${m.id}')" class="cursor-pointer text-[9px] text-red-700">✖</span></div>` : ''}
+                    </div></div>`;
+            }).join('');
+            box.scrollTop = box.scrollHeight;
         }
 
-        // باقي الدوال (نفسها)
-        async function editMsg(msgId) {
-            const newVal = prompt("Rewrite Packet Content:");
-            if(newVal) {
-                await fetch('/edit-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, newVal, sender: currentUser.username})});
-                lastMsgCount = 0;
-            }
+        async function ui_edit(id) {
+            const n = prompt("Edit packet:");
+            if(n) await fetch('/edit-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, newVal: n})});
         }
+        async function ui_del(id) {
+            if(confirm("Destroy?")) await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+        }
+        function logout() { localStorage.removeItem(`priv_v4_${me.username}`); location.reload(); }
 
-        async function deleteMsg(msgId) {
-            if(confirm("Terminate Packet Data?")) {
-                await fetch('/delete-message', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({msgId, sender: currentUser.username})});
-                lastMsgCount = 0;
-            }
+        // --- Groups ---
+        async function createGroup() {
+            const n = prompt("Group Name:");
+            if(n) await fetch('/group/create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: n, user: me.username})});
         }
-
-        async function openMemberManager() {
-            const res = await fetch(`/my-groups/${currentUser.username}`);
-            const groups = await res.json();
-            const members = groups[activeGroup.groupId].members;
-            const list = Object.keys(members).join('\n');
-            const toRemove = prompt(`SECTOR AGENTS:\n${list}\n\nEnter @nickname to EVICT (Creator only):`);
-            if(toRemove && currentUser.username === activeGroup.creator) {
-                await fetch('/remove-group-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: toRemove.replace('@','')})});
-                alert("Agent Removed.");
-            }
+        async function ui_loadGroups() {
+            const res = await fetch(`/groups/${me.username}`);
+            const gs = await res.json();
+            document.getElementById('group-box').innerHTML = gs.map(g => `<div onclick='setGroup(${JSON.stringify(g)})' class="p-2 glass rounded-lg text-[9px] cursor-pointer mb-1 hover:bg-cyan-500/10 uppercase"># ${g.name}</div>`).join('');
         }
-
-        async function addMemberToGroup() {
-            const h = prompt("Authorize Agent @nickname:");
-            if(!h) return;
-            const r = await fetch('/add-member-by-handle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ groupId: activeGroup.groupId, handle: h.replace('@','') })
-            });
-            if(r.ok) alert("Node Authorized."); else alert("Target Unreachable.");
+        function setGroup(g) {
+            gActive = g; target = null; lastLen = 0;
+            document.getElementById('t-name').innerText = g.name;
+            document.getElementById('t-status').innerText = "SECTOR_OPEN_CHANNEL";
+            document.getElementById('g-tools').classList.remove('hidden');
+            document.getElementById('msgs-box').innerHTML = '';
         }
-
-        async function refreshUsers() { 
-            const r = await fetch('/users'); 
-            allCachedUsers = await r.json(); 
+        async function addGroupMember() {
+            const m = prompt("Agent ID:");
+            if(m) await fetch('/group/add', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({gid: gActive.id, member: m.toLowerCase()})});
         }
-
-        async function loadUsers() {
-            const v = document.getElementById('searchInput').value.trim().toLowerCase();
-            const list = document.getElementById('user-list');
-            if(!v) return list.innerHTML = '';
-            const filtered = allCachedUsers.filter(u => u.handle.toLowerCase().includes(v) && u.username !== currentUser.username);
-            list.innerHTML = filtered.map(u => `<button onmousedown='setTarget(${JSON.stringify(u)})' class="w-full p-3 mb-1 rounded-xl flex items-center gap-3 hover:bg-cyber/10 text-left active:scale-95 transition-all"><div class="w-8 h-8 rounded-full bg-cyber/20 flex items-center justify-center font-bold text-[10px] shadow-inner">${u.handle[0].toUpperCase()}</div><div class="flex-1"><p class="font-bold text-xs uppercase tracking-tighter">@${u.handle}</p></div></button>`).join('');
-        }
-
-        function setTarget(user) { 
-            targetUser = user; activeGroup = null; lastMsgCount = 0; 
-            document.getElementById('current-chat-name').innerText = "@" + user.handle; 
-            document.getElementById('target-avatar').innerText = user.handle[0].toUpperCase(); 
-            document.getElementById('chat-status').innerText = "RSA Tunnel Established"; 
-            document.getElementById('msg-area').innerHTML = ''; 
-            document.getElementById('add-mem-btn').classList.add('hidden'); 
-            document.getElementById('manage-mem-btn').classList.add('hidden'); 
-            document.getElementById('delete-group-btn').classList.add('hidden'); 
-        }
-
-        function openFromInbox(h) { 
-            const u = allCachedUsers.find(x => x.username === h || x.handle === h); 
-            if(u) setTarget(u); 
-        }
-
-        function logout() { location.reload(); }
-        function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Agent Authorization' : 'Security Terminal'; }
-        function showSetup() { document.getElementById('auth-section').classList.add('hidden'); document.getElementById('setup-section').classList.remove('hidden'); }
-        async function saveHandle() { 
-            const h = document.getElementById('new-handle').value.trim().toLowerCase(); 
-            await fetch('/add-member', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: currentUser.username, handle: h})}); 
-            currentUser.handle = h; startChat(); 
-        }
-        async function resetPass() { 
-            const u = prompt("Agent ID:"), p = prompt("New Cipher:"); 
-            await fetch('/reset-password', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:p})}); 
-        }
-        async function createGroup() { 
-            const n = prompt("Sector Name:"); 
-            if(n) await fetch('/create-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupName: n, creator: currentUser.username})}); 
-            loadGroups(); 
-        }
-        async function loadGroups() { 
-            const r = await fetch(`/my-groups/${currentUser.username}`); 
-            const g = await r.json(); 
-            document.getElementById('group-list').innerHTML = Object.keys(g).map(id => `<button onmousedown="setGroup('${id}', '${g[id].name}', '${g[id].creator}')" class="w-full p-3 glass rounded-xl text-[10px] font-black uppercase text-cyber border-l-4 border-cyber/40 text-left mb-1 hover:bg-cyber/5 transition-all"># ${g[id].name}</button>`).join(''); 
-        }
-        function setGroup(id, n, c) { 
-            activeGroup = {groupId: id, name: n, creator: c}; targetUser = null; lastMsgCount = 0; 
-            document.getElementById('current-chat-name').innerText = n; 
-            document.getElementById('add-mem-btn').classList.remove('hidden'); 
-            document.getElementById('manage-mem-btn').classList.remove('hidden'); 
-            if(c === currentUser.username) document.getElementById('delete-group-btn').classList.remove('hidden'); 
-            else document.getElementById('delete-group-btn').classList.add('hidden'); 
-            document.getElementById('msg-area').innerHTML = ''; 
-        }
-        async function deleteActiveGroup() { 
-            if(confirm("Terminate Secure Sector?")) await fetch('/delete-group', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({groupId: activeGroup.groupId, username: currentUser.username})}); 
-            activeGroup = null; loadGroups(); document.getElementById('msg-area').innerHTML = ''; 
+        async function deleteGroup() {
+            if(confirm("Destroy?")) { await fetch('/group/del', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({gid: gActive.id})}); location.reload(); }
         }
     </script>
 </body>
