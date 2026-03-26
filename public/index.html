@@ -20,6 +20,9 @@
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-all text-[12px] ml-2 cursor-pointer hover:text-cyber inline-block; }
         .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
+        /* أنيميشن لظهور لوحة البحث */
+        .search-panel { transition: all 0.3s ease-in-out; max-height: 0; opacity: 0; overflow: hidden; }
+        .search-panel.active { max-height: 300px; opacity: 1; margin-bottom: 1rem; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen p-4 flex flex-col">
@@ -65,7 +68,8 @@
                 <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Scan handle..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition">
                 
                 <div class="flex-1 overflow-y-auto space-y-4 pr-2 chat-area">
-                    <div id="search-results-section">
+                    <div id="search-panel" class="search-panel">
+                        <p class="text-[8px] font-black text-cyber uppercase mb-2 tracking-[0.2em] opacity-80 italic">Found Agents</p>
                         <div id="user-list" class="space-y-1"></div>
                     </div>
                     
@@ -122,7 +126,6 @@
             if(res.ok) {
                 me = data;
                 document.getElementById('auth-section').classList.add('hidden');
-                // لو اليوزر مسجل جديد أو معندهوش Handle يفتح شاشة الـ Setup
                 if(!me.handle) document.getElementById('setup-section').classList.remove('hidden');
                 else enterTerminal();
             } else alert(data.error);
@@ -131,18 +134,8 @@
         async function saveHandle() {
             const h = document.getElementById('new-handle').value.trim().toLowerCase();
             if(!h) return alert("Nickname required");
-            // تعديل المسار ليتوافق مع السيرفر (set-handle)
-            const res = await fetch('/set-handle', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({username: me.username, handle: h})
-            });
-            if(res.ok) {
-                me.handle = h; 
-                enterTerminal();
-            } else {
-                alert("Failed to confirm identity.");
-            }
+            const res = await fetch('/set-handle', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: me.username, handle: h})});
+            if(res.ok) { me.handle = h; enterTerminal(); } else alert("Failed to confirm identity.");
         }
 
         function enterTerminal() {
@@ -154,20 +147,26 @@
         }
 
         async function fetchUsers() {
-            const res = await fetch('/users'); 
-            usersRaw = await res.json();
+            const res = await fetch('/users'); usersRaw = await res.json();
         }
 
         function loadUsers() {
             const q = document.getElementById('searchInput').value.toLowerCase().trim();
             const container = document.getElementById('user-list');
-            if(!q) { container.innerHTML = ''; return; }
+            const panel = document.getElementById('search-panel');
+            
+            if(!q) { 
+                container.innerHTML = ''; 
+                panel.classList.remove('active');
+                return; 
+            }
             
             const filtered = usersRaw.filter(u => 
                 (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) 
                 && u.username !== me.username
             );
             
+            panel.classList.add('active');
             container.innerHTML = filtered.map(u => `
                 <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 flex justify-between items-center transition-all mb-1 border-l-2 border-transparent hover:border-cyber">
                     <span class="text-[10px] font-black uppercase tracking-tighter">@${u.handle || u.username}</span>
@@ -181,8 +180,8 @@
             document.getElementById('t-avatar').innerText = (u.handle || u.username)[0].toUpperCase();
             document.getElementById('t-status').innerText = "PRIVATE_HISTORY_SYNC_ACTIVE";
             document.getElementById('msgs-box').innerHTML = '';
-            document.getElementById('user-list').innerHTML = '';
             document.getElementById('searchInput').value = '';
+            document.getElementById('search-panel').classList.remove('active');
         }
 
         async function dispatchMsg() {
@@ -211,15 +210,17 @@
                         } catch(e) { uniqueSenders[p.sender] = "🔒 [Encrypted]"; }
                     }
                 });
-                document.getElementById('inbox-list').innerHTML = Object.keys(uniqueSenders).map(s => `
+                document.getElementById('inbox-list').innerHTML = Object.keys(uniqueSenders).map(s => {
+                    const senderData = usersRaw.find(u => u.username === s) || {username: s};
+                    return `
                     <div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer relative border-l-2 border-cyber mb-1 hover:bg-cyber/5">
                         <div class="notification-dot"></div>
-                        <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
+                        <p class="text-[9px] font-black uppercase text-cyber">@${senderData.handle || s}</p>
                         <p class="text-[8px] opacity-60 truncate">${uniqueSenders[s]}</p>
-                    </div>`).join('');
+                    </div>`}).join('');
             } catch(e) {}
 
-            // 2. Chat History Sync
+            // 2. Chat Sync
             if(!target) return;
             const res = await fetch(`/messages-full/${me.username}/${target.username}`);
             const msgs = await res.json();
