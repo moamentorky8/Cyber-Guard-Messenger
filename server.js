@@ -1,4 +1,4 @@
-const express = require('express');
+  const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const admin = require("firebase-admin");
@@ -7,16 +7,15 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعداد Firebase ---
+// --- 1. إعداد Firebase Neural Link ---
 if (!admin.apps.length) {
     try {
-        // تأكد من وجود ملف المفتاح في نفس المجلد أو استخدام Environment Variables
-        const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
-            ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) 
-            : require("./serviceAccountKey.json");
-
+        // تأكد من وجود ملف المفتاح serviceAccountKey.json في نفس المجلد
+        const serviceAccount = require("./serviceAccountKey.json");
+        
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
+            // ضع رابط قاعدة بيانات Firebase الخاصة بك هنا
             databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
         });
         console.log("🛡️ Cyber Terminal: Firebase Neural Link Established");
@@ -28,7 +27,7 @@ if (!admin.apps.length) {
 const db = admin.database();
 const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
-// --- 2. Auth & Identity ---
+// --- 2. نظام الهوية والتحقق (Auth) ---
 app.post('/auth', async (req, res) => {
     const { username, password, publicKey, isLogin } = req.body;
     const u = username.toLowerCase().trim();
@@ -40,7 +39,7 @@ app.post('/auth', async (req, res) => {
         if (!user || user.password !== hash(password)) {
             return res.status(401).json({ error: "Access Denied: Invalid Credentials" });
         }
-        // تحديث المفتاح العام وحالة الظهور عند كل دخول
+        // تحديث المفتاح العام وحالة الظهور (Online Heartbeat)
         await ref.update({ publicKey, lastSeen: Date.now() });
         res.json({ username: u, handle: user.handle || u, publicKey: user.publicKey });
     } else {
@@ -73,7 +72,7 @@ app.post('/reset-pass', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- 3. Messaging Engine ---
+// --- 3. محرك الرسائل والهيستوري (Messaging Engine) ---
 app.post('/send', async (req, res) => {
     const msgRef = db.ref("messages").push();
     await msgRef.set({ 
@@ -85,10 +84,11 @@ app.post('/send', async (req, res) => {
     res.json({ success: true });
 });
 
-// جلب المحادثة الكاملة
-app.get('/msgs/:u1/:u2', async (req, res) => {
+// جلب الهيستوري الكامل (Full History Sync)
+app.get('/messages-full/:u1/:u2', async (req, res) => {
     const snap = await db.ref("messages").once("value");
     const all = Object.values(snap.val() || {});
+    // فلترة الرسايل اللي بين الطرفين فقط وترتيبها زمنياً
     const filtered = all.filter(m => 
         (m.sender === req.params.u1 && m.receiver === req.params.u2) || 
         (m.sender === req.params.u2 && m.receiver === req.params.u1)
@@ -96,9 +96,8 @@ app.get('/msgs/:u1/:u2', async (req, res) => {
     res.json(filtered);
 });
 
-// جلب البريد الوارد (Inbox)
-app.get('/inbox/:user', async (req, res) => {
-    // جلب آخر 50 رسالة موجهة للمستخدم
+// جلب رسايل الانبوكس (Inbox Packets)
+app.get('/messages/:user', async (req, res) => {
     const snap = await db.ref("messages")
         .orderByChild("receiver")
         .equalTo(req.params.user)
@@ -107,7 +106,7 @@ app.get('/inbox/:user', async (req, res) => {
     res.json(Object.values(snap.val() || {}));
 });
 
-// --- 4. CRUD Operations ---
+// --- 4. العمليات المتقدمة (CRUD) ---
 app.post('/edit-msg', async (req, res) => {
     const { id, newVal } = req.body;
     await db.ref(`messages/${id}`).update({ message: newVal, edited: true });
@@ -119,7 +118,7 @@ app.post('/del-msg', async (req, res) => {
     res.json({ success: true });
 });
 
-// --- 5. Users Synchronization ---
+// --- 5. تزامن المستخدمين (User Discovery) ---
 app.get('/users', async (req, res) => {
     const snap = await db.ref("users").once("value");
     const data = snap.val() || {};
@@ -127,15 +126,14 @@ app.get('/users', async (req, res) => {
         username: u.username,
         handle: u.handle,
         publicKey: u.publicKey,
-        // يعتبر المستخدم أونلاين لو حدث الصفحة في آخر دقيقة
         status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline"
     })));
 });
 
-// --- 6. تشغيل النظام ---
+// --- 6. تشغيل السيرفر ---
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Cyber Terminal V5 is Active on Port ${PORT}`);
+    console.log(`🚀 Cyber Terminal V6 Active on Port ${PORT}`);
 });
