@@ -44,7 +44,7 @@
             <div class="space-y-4">
                 <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
                 <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition">
-                <button onclick="handleAuth()" class="w-full bg-cyber text-white p-4 rounded-xl font-black uppercase text-xs shadow-lg hover:bg-cyan-500 transition">Authorize Access</button>
+                <button onclick="handleAuth()" id="btn-main" class="w-full bg-cyber text-white p-4 rounded-xl font-black uppercase text-xs shadow-lg hover:bg-cyan-500 transition">Authorize Access</button>
                 <div class="flex justify-between px-2 text-[10px] font-bold text-slate-500 uppercase">
                     <button onclick="toggleAuth()" id="toggle-text" class="hover:text-cyber transition">Initialize New Node</button>
                     <button onclick="handleReset()" class="hover:text-red-400 transition">Reset Pass</button>
@@ -65,8 +65,12 @@
                 <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Scan handle..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition">
                 
                 <div class="flex-1 overflow-y-auto space-y-4 pr-2 chat-area">
-                    <div id="user-list" class="space-y-1"></div>
+                    <div id="search-results-section">
+                        <div id="user-list" class="space-y-1"></div>
+                    </div>
+                    
                     <hr class="border-white/5">
+                    
                     <div>
                         <p class="text-[9px] font-black cyber-txt uppercase mb-2 italic">Historical Inbox</p>
                         <div id="inbox-list" class="space-y-1"></div>
@@ -105,7 +109,6 @@
             const u = document.getElementById('username').value.trim().toLowerCase(), p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("System Warning: Credentials Missing");
 
-            // Key persistence for historical decryption
             let sPriv = localStorage.getItem(`priv_v6_${u}`), sPub = localStorage.getItem(`pub_v6_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
@@ -119,16 +122,27 @@
             if(res.ok) {
                 me = data;
                 document.getElementById('auth-section').classList.add('hidden');
-                if(!isLogin || !data.handle) document.getElementById('setup-section').classList.remove('hidden');
+                // لو اليوزر مسجل جديد أو معندهوش Handle يفتح شاشة الـ Setup
+                if(!me.handle) document.getElementById('setup-section').classList.remove('hidden');
                 else enterTerminal();
             } else alert(data.error);
         }
 
         async function saveHandle() {
             const h = document.getElementById('new-handle').value.trim().toLowerCase();
-            if(!h) return;
-            await fetch('/set-handle', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: me.username, handle: h})});
-            me.handle = h; enterTerminal();
+            if(!h) return alert("Nickname required");
+            // تعديل المسار ليتوافق مع السيرفر (set-handle)
+            const res = await fetch('/set-handle', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({username: me.username, handle: h})
+            });
+            if(res.ok) {
+                me.handle = h; 
+                enterTerminal();
+            } else {
+                alert("Failed to confirm identity.");
+            }
         }
 
         function enterTerminal() {
@@ -140,14 +154,20 @@
         }
 
         async function fetchUsers() {
-            const res = await fetch('/users'); usersRaw = await res.json();
+            const res = await fetch('/users'); 
+            usersRaw = await res.json();
         }
 
         function loadUsers() {
             const q = document.getElementById('searchInput').value.toLowerCase().trim();
             const container = document.getElementById('user-list');
             if(!q) { container.innerHTML = ''; return; }
-            const filtered = usersRaw.filter(u => (u.username.includes(q) || (u.handle && u.handle.includes(q))) && u.username !== me.username);
+            
+            const filtered = usersRaw.filter(u => 
+                (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) 
+                && u.username !== me.username
+            );
+            
             container.innerHTML = filtered.map(u => `
                 <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 flex justify-between items-center transition-all mb-1 border-l-2 border-transparent hover:border-cyber">
                     <span class="text-[10px] font-black uppercase tracking-tighter">@${u.handle || u.username}</span>
@@ -178,7 +198,7 @@
 
         async function sync() {
             if(!me) return;
-            // 1. Historical Inbox Sync
+            // 1. Inbox Sync
             try {
                 const inRes = await fetch(`/messages/${me.username}`);
                 const packets = await inRes.json();
@@ -199,7 +219,7 @@
                     </div>`).join('');
             } catch(e) {}
 
-            // 2. Full History Chat Sync
+            // 2. Chat History Sync
             if(!target) return;
             const res = await fetch(`/messages-full/${me.username}/${target.username}`);
             const msgs = await res.json();
