@@ -7,10 +7,9 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعداد Firebase بصمام أمان (Vercel Ready) ---
+// --- 1. إعداد Firebase Neural Link بصمام أمان ---
 let db;
 try {
-    // يحاول القراءة من البيئة (Environment Variables) أولاً، ثم الملف المحلي
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
         ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) 
         : require("./serviceAccountKey.json");
@@ -22,20 +21,20 @@ try {
         });
     }
     db = admin.database();
-    console.log("🛡️ Neural Link Established");
+    console.log("🛡️ Firebase Neural Link: ACTIVE");
 } catch (e) {
-    console.error("❌ Firebase Link Failed: System running in Offline Mode");
+    console.error("❌ Firebase Link Failed. Running in SAFE MODE (Offline).");
 }
 
 const hash = (p) => crypto.createHash('sha256').update(p).digest('hex');
 
-// Middleware لمنع الانهيار لو الداتابيز مش واصلة
+// Middleware لمنع الانهيار (Critical for Vercel stability)
 const validateLink = (req, res, next) => {
     if (!db) return res.status(503).json({ error: "Terminal Offline: Firebase Connection Failed" });
     next();
 };
 
-// --- 2. Routes (مطابقة تماماً لكود الـ HTML بتاعك) ---
+// --- 2. Identity & Access Routes ---
 
 app.post('/auth', validateLink, async (req, res) => {
     try {
@@ -43,30 +42,44 @@ app.post('/auth', validateLink, async (req, res) => {
         const u = username.toLowerCase().trim();
         const ref = db.ref(`users/${u}`);
         const snap = await ref.once("value");
+        const user = snap.val();
 
         if (isLogin) {
-            const user = snap.val();
-            if (!user || user.password !== hash(password)) return res.status(401).json({ error: "Access Denied" });
+            if (!user || user.password !== hash(password)) {
+                return res.status(401).json({ error: "Access Denied: Invalid Credentials" });
+            }
+            // تحديث المفتاح العام لضمان مزامنة الهيستوري
             await ref.update({ publicKey, lastSeen: Date.now() });
-            res.json({ username: u, handle: user.handle || u, publicKey: user.publicKey });
+            res.json({ username: u, handle: user.handle || "", publicKey: user.publicKey });
         } else {
-            if (snap.exists()) return res.status(400).json({ error: "ID Taken" });
+            if (snap.exists()) return res.status(400).json({ error: "Agent ID already exists" });
             await ref.set({ username: u, password: hash(password), publicKey, lastSeen: Date.now(), handle: "" });
             res.status(201).json({ success: true });
         }
     } catch (err) { res.status(500).json({ error: "Internal Auth Error" }); }
 });
 
+app.post('/set-handle', validateLink, async (req, res) => {
+    try {
+        const { username, handle } = req.body;
+        await db.ref(`users/${username.toLowerCase()}`).update({ handle });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Handle Update Failed" }); }
+});
+
+// --- 3. Discovery & Messenger Engine ---
+
 app.get('/users', validateLink, async (req, res) => {
     try {
         const snap = await db.ref("users").once("value");
         const data = snap.val() || {};
-        res.json(Object.values(data).map(u => ({
+        const userList = Object.values(data).map(u => ({
             username: u.username,
-            handle: u.handle,
+            handle: u.handle || u.username,
             publicKey: u.publicKey,
             status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline"
-        })));
+        }));
+        res.json(userList);
     } catch (e) { res.json([]); }
 });
 
@@ -75,7 +88,7 @@ app.post('/send', validateLink, async (req, res) => {
         const msgRef = db.ref("messages").push();
         await msgRef.set({ ...req.body, id: msgRef.key, timestamp: Date.now(), edited: false });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Send Failed" }); }
+    } catch (e) { res.status(500).json({ error: "Dispatch Failed" }); }
 });
 
 app.get('/messages-full/:u1/:u2', validateLink, async (req, res) => {
@@ -92,36 +105,46 @@ app.get('/messages-full/:u1/:u2', validateLink, async (req, res) => {
 
 app.get('/messages/:user', validateLink, async (req, res) => {
     try {
+        // جلب آخر الرسايل للانبوكس التاريخي
         const snap = await db.ref("messages").orderByChild("receiver").equalTo(req.params.user).limitToLast(50).once("value");
         res.json(Object.values(snap.val() || {}));
     } catch (e) { res.json([]); }
 });
 
+// --- 4. Historical Correction Routes (Edit/Delete) ---
+
 app.post('/edit-msg', validateLink, async (req, res) => {
     try {
-        await db.ref(`messages/${req.body.id}`).update({ message: req.body.newVal, edited: true });
+        const { id, newVal } = req.body;
+        await db.ref(`messages/${id}`).update({ message: newVal, edited: true });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Update Failed" }); }
+    } catch (e) { res.status(500).json({ error: "Correction Failed" }); }
 });
 
 app.post('/del-msg', validateLink, async (req, res) => {
     try {
         await db.ref(`messages/${req.body.id}`).remove();
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Deletion Failed" }); }
-});
-
-app.post('/set-handle', validateLink, async (req, res) => {
-    await db.ref(`users/${req.body.username.toLowerCase()}`).update({ handle: req.body.handle });
-    res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Destruction Failed" }); }
 });
 
 app.post('/reset-pass', validateLink, async (req, res) => {
-    await db.ref(`users/${req.body.username.toLowerCase()}`).update({ password: hash(req.body.newPassword) });
-    res.json({ success: true });
+    try {
+        await db.ref(`users/${req.body.username.toLowerCase()}`).update({ password: hash(req.body.newPassword) });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Reset Failed" }); }
 });
 
+// --- 5. Terminal Deployment ---
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Cyber Terminal Online on Port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`
+    =========================================
+    🛡️  CYBER TERMINAL SERVER V6 - ONLINE
+    🚀  Neural Port: ${PORT}
+    📡  Status: Firebase Stable
+    =========================================
+    `);
+});
