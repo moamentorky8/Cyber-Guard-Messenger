@@ -60,6 +60,7 @@
         </section>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
+            
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
@@ -71,14 +72,14 @@
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber uppercase font-mono tracking-tighter">?</div>
                         <div>
                             <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
-                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black">Waiting for Link...</p>
+                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black">Secure Tunnel Offline</p>
                         </div>
                     </div>
                 </div>
                 <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
-                    <input type="text" id="m-input" placeholder="Type packet..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
-                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all">
+                    <input type="text" id="m-input" placeholder="Type secure packet..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
+                    <button onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                     </button>
                 </div>
@@ -102,21 +103,24 @@
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Credentials Missing");
-            const hasher = forge.md.sha256.create(); hasher.update(p);
-            const securePass = hasher.digest().toHex();
-            let sPriv = localStorage.getItem(`priv_v7_${u}`), sPub = localStorage.getItem(`pub_v7_${u}`);
+
+            const securePass = forge.md.sha256.create().update(p).digest().toHex();
+
+            // --- RSA 256-bit Logic ---
+            let sPriv = localStorage.getItem(`priv_rsa256_${u}`), sPub = localStorage.getItem(`pub_rsa256_${u}`);
             if(!sPriv) {
-                const pair = pki.rsa.generateKeyPair(1024);
+                const pair = pki.rsa.generateKeyPair(256);
                 sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_v7_${u}`, sPriv); localStorage.setItem(`pub_v7_${u}`, sPub);
+                localStorage.setItem(`priv_rsa256_${u}`, sPriv); localStorage.setItem(`pub_rsa256_${u}`, sPub);
             }
             myPriv = pki.privateKeyFromPem(sPriv);
+
             const res = await fetch('/auth', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, password:securePass, publicKey:btoa(sPub), isLogin})});
             const data = await res.json();
             if(res.ok) {
                 me = data;
                 document.getElementById('auth-section').classList.add('hidden');
-                if(!me.handle) document.getElementById('setup-section').classList.remove('hidden');
+                if(!me.handle || me.handle === "") document.getElementById('setup-section').classList.remove('hidden');
                 else enterTerminal();
             } else alert(data.error);
         }
@@ -128,7 +132,7 @@
             try {
                 const res = await fetch('/set-handle', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: curU, handle: h})});
                 if(res.ok) { if(me) me.handle = h; enterTerminal(); }
-                else { const err = await res.json(); alert("Setup Denied: " + err.error); }
+                else alert("Sync Error");
             } catch (e) { alert("Link failure."); }
         }
 
@@ -137,13 +141,11 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-            setInterval(sync, 1000);
-            fetchUsers();
+            setInterval(sync, 1000); fetchUsers();
         }
 
         async function fetchUsers() {
-            const res = await fetch('/users'); 
-            usersRaw = await res.json();
+            const res = await fetch('/users'); usersRaw = await res.json();
         }
 
         function loadUsers() {
@@ -152,8 +154,8 @@
             if (q === "") { container.innerHTML = ""; return; }
             const filtered = usersRaw.filter(u => (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) && u.username !== me.username);
             container.innerHTML = filtered.map(u => `
-                <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 flex justify-between items-center transition-all mb-1 border border-white/5 hover:border-cyber/50">
-                    <span class="text-[10px] font-black uppercase text-white font-mono truncate w-32">@${u.handle || u.username}</span>
+                <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 flex justify-between items-center transition-all mb-1 border border-white/5">
+                    <span class="text-[10px] font-black uppercase text-white font-mono">@${u.handle || u.username}</span>
                     <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500' : 'bg-slate-700'}"></div>
                 </div>`).join('');
         }
@@ -162,46 +164,26 @@
             target = u; lastLen = 0;
             document.getElementById('t-name').innerText = (u.handle || u.username).toUpperCase();
             document.getElementById('target-avatar').innerText = (u.handle || u.username)[0].toUpperCase();
-            document.getElementById('t-status').innerText = "PRIVATE_RSA_TUNNEL_ACTIVE";
+            document.getElementById('t-status').innerText = "PRIVATE_RSA_256_ACTIVE";
             document.getElementById('msgs-box').innerHTML = '';
         }
 
         async function dispatchMsg() {
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
-            
             try {
-                // 1. جلب أحدث بيانات للمستخدمين لضمان وجود المفتاح
+                // جلب بيانات الطرف الثاني فوراً لضمان وجود المفتاح
                 const res = await fetch('/users');
                 const all = await res.json();
-                usersRaw = all;
-                
-                // 2. البحث عن الطرف المستهدف في البيانات الجديدة
                 const freshTarget = all.find(u => u.username === target.username);
-                
-                if (!freshTarget || !freshTarget.publicKey) {
-                    console.error("Public Key missing for:", target.username);
-                    alert("Node Security Error: Target Secure Key not found.");
-                    return;
-                }
+                if(!freshTarget || !freshTarget.publicKey) throw new Error("Key Lost");
 
-                // 3. التشفير باستخدام المفتاح المسترجع
                 const pubKey = pki.publicKeyFromPem(atob(freshTarget.publicKey));
                 const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 
-                // 4. الإرسال
-                await fetch('/send', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({sender: me.username, receiver: freshTarget.username, message: packet})
-                });
-                
-                input.value = '';
-                sync();
-            } catch (e) { 
-                console.error("Encryption Logic Fault:", e);
-                alert("Critical Handshake Failure: Neural link compromised."); 
-            }
+                await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
+                input.value = ''; sync();
+            } catch (e) { alert("Encryption Error: RSA 256 Handshake Failed"); }
         }
 
         async function sync() {
@@ -214,15 +196,12 @@
                     try { 
                         const dec = myPriv.decrypt(forge.util.decode64(p.message), 'RSA-OAEP');
                         unique[p.sender] = forge.util.decodeUtf8(dec);
-                    } catch(e) { unique[p.sender] = "🔒 [Encrypted]"; }
+                    } catch(e) { unique[p.sender] = "🔒 [Encrypted Data]"; }
                 }});
-                
                 document.getElementById('inbox-list').innerHTML = Object.keys(unique).map(s => {
                     const sData = usersRaw.find(u => u.username === s) || {handle: s};
-                    return `
-                    <div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
-                        <div class="notification-dot"></div>
-                        <p class="text-[9px] font-black uppercase text-cyber">@${sData.handle || s}</p>
+                    return `<div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5">
+                        <p class="text-[9px] font-black uppercase text-cyber font-mono">@${sData.handle || s}</p>
                         <p class="text-[8px] opacity-60 truncate text-white">${unique[s]}</p>
                     </div>`}).join('');
 
@@ -231,42 +210,26 @@
                 const msgs = await res.json();
                 if(msgs.length === lastLen) return;
                 lastLen = msgs.length;
-                
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     let d = m.message; const isMe = m.sender === me.username;
-                    if(!isMe) { 
-                        try { 
-                            d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); 
-                        } catch(e) { d = "🔒 Packet Integrity Compromised"; } 
-                    }
+                    if(!isMe) { try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Decryption Fail"; } }
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group font-mono">
-                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
-                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
+                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[80%] relative shadow-lg">
+                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender}</p>
                             <p class="text-xs">${d}</p>
-                            ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
-                                <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
-                                <span onclick="ui_del('${m.id}')" class="msg-btn text-red-500 ml-2">✖</span>
-                            </div>` : ''}
                         </div></div>`;
                 }).join('');
                 document.getElementById('msgs-box').scrollTop = document.getElementById('msgs-box').scrollHeight;
             } catch(e) {}
         }
 
-        async function ui_edit(id) {
-            const n = prompt("Correct history packet:");
-            if(n) { await fetch('/edit-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, newVal: n})}); lastLen = 0; }
-        }
-        async function ui_del(id) {
-            if(confirm("Destroy packet?")) { await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})}); lastLen = 0; }
-        }
         function openFromInbox(s) { const u = usersRaw.find(x => x.username === s); if(u) setTarget(u); }
         function logout() { localStorage.clear(); location.reload(); }
         async function handleReset() {
             const u = prompt("ID:"), p = prompt("New Pass:");
             if(u && p) {
-                const hasher = forge.md.sha256.create(); hasher.update(p);
-                await fetch('/reset-pass', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:hasher.digest().toHex()})});
+                const secureNew = forge.md.sha256.create().update(p).digest().toHex();
+                await fetch('/reset-pass', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:secureNew})});
             }
         }
     </script>
