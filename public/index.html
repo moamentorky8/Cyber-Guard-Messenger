@@ -78,7 +78,7 @@
                 <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
                     <input type="text" id="m-input" placeholder="Type secure packet..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
-                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 transition-all">
+                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                     </button>
                 </div>
@@ -102,10 +102,9 @@
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Credentials Missing");
-
-            const securePass = forge.md.sha256.create().update(p).digest().toHex();
-
-            // استخدام 1024 بت (v10) لضمان أمان البيانات ومنع التلخبط
+            const hasher = forge.md.sha256.create().update(p);
+            const securePass = hasher.digest().toHex();
+            
             let sPriv = localStorage.getItem(`priv_v10_${u}`), sPub = localStorage.getItem(`pub_v10_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
@@ -142,15 +141,23 @@
 
         async function fetchUsers() { const res = await fetch('/users'); usersRaw = await res.json(); }
 
+        // --- البحث من أول حرف (Index 0) ---
         function loadUsers() {
             const q = document.getElementById('searchInput').value.toLowerCase().trim();
             const container = document.getElementById('user-list');
             if (q === "") { container.innerHTML = ""; return; }
-            const filtered = usersRaw.filter(u => (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) && u.username !== me.username);
-            container.innerHTML = filtered.map(u => `<div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all">
-                <span class="text-[10px] font-black uppercase text-white font-mono">@${u.handle || u.username}</span>
-                <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
-            </div>`).join('');
+            
+            // فلترة المستخدمين من الداتابيز
+            const filtered = usersRaw.filter(u => 
+                (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) 
+                && u.username !== me.username
+            );
+            
+            container.innerHTML = filtered.map(u => `
+                <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
+                    <span class="text-[10px] font-black uppercase text-white font-mono">@${u.handle || u.username}</span>
+                    <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
+                </div>`).join('');
         }
 
         function setTarget(u) {
@@ -165,7 +172,7 @@
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
-                // جلب أحدث مفتاح للطرف الآخر من السيرفر لضمان عدم حدوث Fault
+                // جلب أحدث مفتاح للطرف الآخر
                 const res = await fetch('/users');
                 const all = await res.json();
                 const freshTarget = all.find(u => u.username === target.username);
@@ -177,13 +184,12 @@
                 
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
                 input.value = ''; sync();
-            } catch (e) { alert("Encryption Error: Handshake Failed"); }
+            } catch (e) { alert("Encryption Error: Link Compromised"); }
         }
 
         async function sync() {
             if(!me) return;
             try {
-                // تحديث الـ Inbox مع النقطة الحمراء للرسايل الجديدة
                 const inRes = await fetch(`/messages/${me.username}`);
                 const packets = await inRes.json();
                 const unique = {};
