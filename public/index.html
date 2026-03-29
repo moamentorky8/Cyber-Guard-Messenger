@@ -162,7 +162,7 @@
             target = u; lastLen = 0;
             document.getElementById('t-name').innerText = (u.handle || u.username).toUpperCase();
             document.getElementById('target-avatar').innerText = (u.handle || u.username)[0].toUpperCase();
-            document.getElementById('t-status').innerText = "SECURE_TUNNEL_ESTABLISHED";
+            document.getElementById('t-status').innerText = "PRIVATE_RSA_TUNNEL_ACTIVE";
             document.getElementById('msgs-box').innerHTML = '';
         }
 
@@ -171,33 +171,36 @@
             if(!txt || !target) return;
             
             try {
-                // تحديث بيانات التارجت من usersRaw لضمان وجود الـ publicKey
-                const freshTarget = usersRaw.find(u => u.username === target.username);
+                // 1. جلب أحدث بيانات للمستخدمين لضمان وجود المفتاح
+                const res = await fetch('/users');
+                const all = await res.json();
+                usersRaw = all;
+                
+                // 2. البحث عن الطرف المستهدف في البيانات الجديدة
+                const freshTarget = all.find(u => u.username === target.username);
+                
                 if (!freshTarget || !freshTarget.publicKey) {
-                    // لو مش موجود في usersRaw، نجيبه من السيرفر فوراً
-                    const res = await fetch('/users');
-                    const all = await res.json();
-                    usersRaw = all;
-                    const secondAttempt = all.find(u => u.username === target.username);
-                    if(!secondAttempt || !secondAttempt.publicKey) throw new Error("Key Missing");
-                    target = secondAttempt;
-                } else {
-                    target = freshTarget;
+                    console.error("Public Key missing for:", target.username);
+                    alert("Node Security Error: Target Secure Key not found.");
+                    return;
                 }
 
-                const pubKey = pki.publicKeyFromPem(atob(target.publicKey));
+                // 3. التشفير باستخدام المفتاح المسترجع
+                const pubKey = pki.publicKeyFromPem(atob(freshTarget.publicKey));
                 const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 
+                // 4. الإرسال
                 await fetch('/send', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})
+                    body: JSON.stringify({sender: me.username, receiver: freshTarget.username, message: packet})
                 });
                 
                 input.value = '';
                 sync();
             } catch (e) { 
-                alert("Handshake Failure: Node Secure Key Missing"); 
+                console.error("Encryption Logic Fault:", e);
+                alert("Critical Handshake Failure: Neural link compromised."); 
             }
         }
 
@@ -220,7 +223,7 @@
                     <div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
                         <div class="notification-dot"></div>
                         <p class="text-[9px] font-black uppercase text-cyber">@${sData.handle || s}</p>
-                        <p class="text-[8px] opacity-60 truncate text-white font-medium">${unique[s]}</p>
+                        <p class="text-[8px] opacity-60 truncate text-white">${unique[s]}</p>
                     </div>`}).join('');
 
                 if(!target) return;
@@ -236,10 +239,10 @@
                             d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); 
                         } catch(e) { d = "🔒 Packet Integrity Compromised"; } 
                     }
-                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[80%] relative shadow-lg">
+                    return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group font-mono">
+                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
                             <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
-                            <p class="text-xs font-medium">${d}</p>
+                            <p class="text-xs">${d}</p>
                             ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
                                 <span onclick="ui_del('${m.id}')" class="msg-btn text-red-500 ml-2">✖</span>
