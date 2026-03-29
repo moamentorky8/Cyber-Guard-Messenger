@@ -137,12 +137,13 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-            setInterval(sync, 1000); // تسريع المزامنة للحظية
+            setInterval(sync, 1000);
             fetchUsers();
         }
 
         async function fetchUsers() {
-            const res = await fetch('/users'); usersRaw = await res.json();
+            const res = await fetch('/users'); 
+            usersRaw = await res.json();
         }
 
         function loadUsers() {
@@ -170,26 +171,31 @@
             if(!txt || !target) return;
             
             try {
-                // حل Encryption Fault: جلب أحدث بيانات للطرف الآخر قبل الإرسال لضمان وجود المفتاح
-                const uRes = await fetch('/users');
-                const all = await uRes.json();
-                const freshTarget = all.find(u => u.username === target.username);
-                
+                // تحديث بيانات التارجت من usersRaw لضمان وجود الـ publicKey
+                const freshTarget = usersRaw.find(u => u.username === target.username);
                 if (!freshTarget || !freshTarget.publicKey) {
-                    throw new Error("Missing Key");
+                    // لو مش موجود في usersRaw، نجيبه من السيرفر فوراً
+                    const res = await fetch('/users');
+                    const all = await res.json();
+                    usersRaw = all;
+                    const secondAttempt = all.find(u => u.username === target.username);
+                    if(!secondAttempt || !secondAttempt.publicKey) throw new Error("Key Missing");
+                    target = secondAttempt;
+                } else {
+                    target = freshTarget;
                 }
 
-                const pubKey = pki.publicKeyFromPem(atob(freshTarget.publicKey));
+                const pubKey = pki.publicKeyFromPem(atob(target.publicKey));
                 const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 
                 await fetch('/send', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({sender: me.username, receiver: freshTarget.username, message: packet})
+                    body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})
                 });
                 
                 input.value = '';
-                sync(); // تحديث فوري بعد الإرسال
+                sync();
             } catch (e) { 
                 alert("Handshake Failure: Node Secure Key Missing"); 
             }
@@ -214,7 +220,7 @@
                     <div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
                         <div class="notification-dot"></div>
                         <p class="text-[9px] font-black uppercase text-cyber">@${sData.handle || s}</p>
-                        <p class="text-[8px] opacity-60 truncate text-white">${unique[s]}</p>
+                        <p class="text-[8px] opacity-60 truncate text-white font-medium">${unique[s]}</p>
                     </div>`}).join('');
 
                 if(!target) return;
@@ -231,9 +237,9 @@
                         } catch(e) { d = "🔒 Packet Integrity Compromised"; } 
                     }
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
+                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[80%] relative shadow-lg">
                             <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
-                            <p class="text-xs">${d}</p>
+                            <p class="text-xs font-medium">${d}</p>
                             ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
                                 <span onclick="ui_del('${m.id}')" class="msg-btn text-red-500 ml-2">✖</span>
