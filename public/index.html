@@ -39,7 +39,7 @@
         <section id="auth-section" class="max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber animate-slide-up">
             <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase italic text-cyber text-white">Security Terminal</h2>
             <div class="space-y-4">
-                <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition text-white text-center font-bold">
+                <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition text-white text-center font-bold uppercase tracking-widest">
                 <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none focus:ring-2 focus:ring-cyber transition text-white text-center font-bold">
                 <button onclick="handleAuth()" class="w-full bg-cyber text-white p-4 rounded-xl font-black uppercase text-xs shadow-lg hover:bg-cyan-500 transition">Authorize Access</button>
                 <div class="flex justify-between px-2 text-[10px] font-bold text-slate-500 uppercase mt-4">
@@ -51,13 +51,12 @@
 
         <section id="setup-section" class="hidden max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] border-t-4 border-green-500 animate-slide-up text-center">
             <h2 class="text-2xl font-black text-green-500 mb-4 uppercase italic">Identity Setup</h2>
-            <p class="text-[10px] opacity-60 mb-6 uppercase tracking-widest text-white">Assign handle for synchronization</p>
             <input type="text" id="new-handle-input" placeholder="@nickname" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none mb-4 text-center text-white focus:ring-2 focus:ring-green-500 font-bold">
             <button onclick="saveHandle()" class="w-full bg-green-500 text-white p-4 rounded-xl font-black uppercase text-xs">Confirm Identity</button>
         </section>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
-            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
+            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden font-mono">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
             </aside>
@@ -68,22 +67,22 @@
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
                         <div>
                             <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
-                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black">Neural Link Offline</p>
+                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter">Handshake Pending...</p>
                         </div>
                     </div>
                 </div>
                 <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
-                    <input type="text" id="m-input" placeholder="Type secure packet..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
-                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all">
+                    <input type="text" id="m-input" placeholder="Type secure packet..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white font-mono">
+                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)]">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                     </button>
                 </div>
             </main>
 
-            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
+            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden font-mono">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Node Discovery</p>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent ID..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full">
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Filter Agent ID..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] outline-none focus:ring-1 focus:ring-cyber transition text-white w-full uppercase tracking-tighter">
                 <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
             </aside>
         </div>
@@ -101,12 +100,12 @@
             if(!u || !p) return alert("Credentials Missing");
             const securePass = forge.md.sha256.create().update(p).digest().toHex();
             
-            // إصدار مفاتيح جديد vFinal لضمان عدم وجود تضارب
-            let sPriv = localStorage.getItem(`priv_vFinal_${u}`), sPub = localStorage.getItem(`pub_vFinal_${u}`);
+            // إصدار مفتاح vULTRA النهائي
+            let sPriv = localStorage.getItem(`priv_vULTRA_${u}`), sPub = localStorage.getItem(`pub_vULTRA_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
                 sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_vFinal_${u}`, sPriv); localStorage.setItem(`pub_vFinal_${u}`, sPub);
+                localStorage.setItem(`priv_vULTRA_${u}`, sPriv); localStorage.setItem(`pub_vULTRA_${u}`, sPub);
             }
             myPriv = pki.privateKeyFromPem(sPriv);
 
@@ -133,7 +132,7 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-            setInterval(sync, 1000); fetchUsers();
+            setInterval(sync, 1500); fetchUsers();
         }
 
         async function fetchUsers() { const res = await fetch('/users'); usersRaw = await res.json(); }
@@ -144,8 +143,8 @@
             if (q === "") { container.innerHTML = ""; return; }
             const filtered = usersRaw.filter(u => (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) && u.username !== me.username);
             container.innerHTML = filtered.map(u => `<div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all">
-                <span class="text-[10px] font-black uppercase text-white">@${u.handle || u.username}</span>
-                <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
+                <span class="text-[10px] font-black uppercase text-white truncate w-3/4">@${u.handle || u.username}</span>
+                <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-slate-700'}"></div>
             </div>`).join('');
         }
 
@@ -153,7 +152,7 @@
             target = u; lastLen = 0;
             document.getElementById('t-name').innerText = (u.handle || u.username).toUpperCase();
             document.getElementById('target-avatar').innerText = (u.handle || u.username)[0].toUpperCase();
-            document.getElementById('t-status').innerText = "PRIVATE_RSA_TUNNEL_ACTIVE";
+            document.getElementById('t-status').innerText = "PRIVATE_RSA_TUNNEL_ESTABLISHED";
             document.getElementById('msgs-box').innerHTML = '';
         }
 
@@ -161,9 +160,8 @@
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
-                // سحب أحدث مفتاح للطرف الآخر من السيرفر فوراً
-                const resUsers = await fetch('/users');
-                const all = await resUsers.json();
+                const resU = await fetch('/users');
+                const all = await resU.json();
                 const freshTarget = all.find(u => u.username === target.username);
                 if(!freshTarget || !freshTarget.publicKey) throw new Error("Key Lost");
 
@@ -173,12 +171,13 @@
                 
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
                 input.value = ''; sync();
-            } catch (e) { alert("Encryption Fault: Check Keys"); }
+            } catch (e) { alert("Link Error: Target Node Offline or Identity Changed"); }
         }
 
         async function sync() {
             if(!me) return;
             try {
+                // مزامنة الـ Inbox
                 const inRes = await fetch(`/messages/${me.username}`);
                 const packets = await inRes.json();
                 const unique = {};
@@ -187,7 +186,7 @@
                         try { 
                             const dec = myPriv.decrypt(forge.util.decode64(p.message), 'RSA-OAEP');
                             unique[p.sender] = forge.util.decodeUtf8(dec);
-                        } catch(e) { unique[p.sender] = "🔒 Secure Packet"; }
+                        } catch(e) { unique[p.sender] = "🔒 ENCRYPTED_PACKET"; }
                     }
                 }
                 
@@ -196,7 +195,7 @@
                     return `<div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
                         <div class="notification-dot"></div>
                         <p class="text-[9px] font-black uppercase text-cyber">@${sData.handle || s}</p>
-                        <p class="text-[8px] opacity-60 truncate text-white font-bold">${unique[s]}</p>
+                        <p class="text-[8px] opacity-60 truncate text-white italic">${unique[s]}</p>
                     </div>`}).join('');
 
                 if(!target) return;
@@ -208,23 +207,27 @@
                 let html = "";
                 for (const m of msgs) {
                     const isMe = m.sender === me.username;
-                    let content = "";
+                    let displayContent = "";
+                    
                     if (isMe) {
-                        content = `<span class="opacity-50 italic">Secure Packet Transmitted</span>`;
+                        // لإصلاح مشكلة المرسل: RSA لا يفك إلا ما شُفر له.
+                        displayContent = `<span class="opacity-50 italic">Encrypted Payload Transmitted</span>`;
                     } else {
                         try {
-                            const dec = myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP');
-                            content = forge.util.decodeUtf8(dec);
-                        } catch(e) { content = `<span class="text-red-400 font-bold">🔒 Locked: Handshake Required</span>`; }
+                            const decoded = myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP');
+                            displayContent = forge.util.decodeUtf8(decoded);
+                        } catch(e) { 
+                            displayContent = `<span class="text-red-400 font-bold tracking-tighter">🔒 INTEGRITY_FAULT: SECURE_KEY_MISMATCH</span>`; 
+                        }
                     }
                     
                     html += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[80%] relative shadow-lg">
-                            <p class="text-[7px] uppercase opacity-50 font-black mb-1 font-mono">${m.sender}</p>
-                            <p class="text-xs font-bold font-mono">${content}</p>
+                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[85%] relative shadow-xl border border-white/5">
+                            <p class="text-[7px] uppercase opacity-50 font-black mb-1 font-mono tracking-widest">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
+                            <p class="text-xs break-words">${displayContent}</p>
                             ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
-                                <span onclick="ui_del('${m.id}')" class="msg-btn text-red-500 ml-2">✖</span>
+                                <span onclick="ui_del('${m.id}')" class="msg-btn text-red-600 ml-2">✖</span>
                             </div>` : ''}
                         </div></div>`;
                 }
@@ -243,11 +246,11 @@
             }
         }
         async function ui_edit(id) {
-            const n = prompt("Correct packet:");
+            const n = prompt("Correct payload:");
             if(n) { await fetch('/edit-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, newVal: n})}); lastLen = 0; }
         }
         async function ui_del(id) {
-            if(confirm("Destroy packet?")) { await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})}); lastLen = 0; }
+            if(confirm("Destroy historical data?")) { await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})}); lastLen = 0; }
         }
     </script>
 </body>
