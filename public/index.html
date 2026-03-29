@@ -19,6 +19,7 @@
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-all text-[12px] ml-2 cursor-pointer hover:text-cyber inline-block; }
+        .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen p-4 flex flex-col">
@@ -59,7 +60,6 @@
         </section>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
-            
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
@@ -78,7 +78,7 @@
                 <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
                     <input type="text" id="m-input" placeholder="Type packet..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
-                    <button onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all">
+                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                     </button>
                 </div>
@@ -87,8 +87,7 @@
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Node Discovery</p>
                 <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent ID..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full">
-                <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area">
-                    </div>
+                <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
             </aside>
         </div>
     </main>
@@ -138,12 +137,12 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-            setInterval(sync, 1500); fetchUsers();
+            setInterval(sync, 1000); // تسريع المزامنة للحظية
+            fetchUsers();
         }
 
         async function fetchUsers() {
             const res = await fetch('/users'); usersRaw = await res.json();
-            // في البداية قايمة البحث فاضية لحد ما يكتب
         }
 
         function loadUsers() {
@@ -151,7 +150,6 @@
             const container = document.getElementById('user-list');
             if (q === "") { container.innerHTML = ""; return; }
             const filtered = usersRaw.filter(u => (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) && u.username !== me.username);
-            
             container.innerHTML = filtered.map(u => `
                 <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 flex justify-between items-center transition-all mb-1 border border-white/5 hover:border-cyber/50">
                     <span class="text-[10px] font-black uppercase text-white font-mono truncate w-32">@${u.handle || u.username}</span>
@@ -163,19 +161,38 @@
             target = u; lastLen = 0;
             document.getElementById('t-name').innerText = (u.handle || u.username).toUpperCase();
             document.getElementById('target-avatar').innerText = (u.handle || u.username)[0].toUpperCase();
-            document.getElementById('t-status').innerText = "PRIVATE_RSA_TUNNEL_ACTIVE";
+            document.getElementById('t-status').innerText = "SECURE_TUNNEL_ESTABLISHED";
             document.getElementById('msgs-box').innerHTML = '';
         }
 
         async function dispatchMsg() {
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
+            
             try {
-                const pubKey = pki.publicKeyFromPem(atob(target.publicKey));
+                // حل Encryption Fault: جلب أحدث بيانات للطرف الآخر قبل الإرسال لضمان وجود المفتاح
+                const uRes = await fetch('/users');
+                const all = await uRes.json();
+                const freshTarget = all.find(u => u.username === target.username);
+                
+                if (!freshTarget || !freshTarget.publicKey) {
+                    throw new Error("Missing Key");
+                }
+
+                const pubKey = pki.publicKeyFromPem(atob(freshTarget.publicKey));
                 const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
-                await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
+                
+                await fetch('/send', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({sender: me.username, receiver: freshTarget.username, message: packet})
+                });
+                
                 input.value = '';
-            } catch (e) { alert("Encryption Fault"); }
+                sync(); // تحديث فوري بعد الإرسال
+            } catch (e) { 
+                alert("Handshake Failure: Node Secure Key Missing"); 
+            }
         }
 
         async function sync() {
@@ -190,6 +207,7 @@
                         unique[p.sender] = forge.util.decodeUtf8(dec);
                     } catch(e) { unique[p.sender] = "🔒 [Encrypted]"; }
                 }});
+                
                 document.getElementById('inbox-list').innerHTML = Object.keys(unique).map(s => {
                     const sData = usersRaw.find(u => u.username === s) || {handle: s};
                     return `
@@ -204,9 +222,14 @@
                 const msgs = await res.json();
                 if(msgs.length === lastLen) return;
                 lastLen = msgs.length;
+                
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     let d = m.message; const isMe = m.sender === me.username;
-                    if(!isMe) { try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Sync Error"; } }
+                    if(!isMe) { 
+                        try { 
+                            d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); 
+                        } catch(e) { d = "🔒 Packet Integrity Compromised"; } 
+                    }
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
                         <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
                             <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
