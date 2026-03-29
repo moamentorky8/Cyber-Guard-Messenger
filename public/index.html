@@ -71,7 +71,7 @@
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
                         <div>
                             <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
-                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black">Secure Tunnel Offline</p>
+                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black">Neural Link Offline</p>
                         </div>
                     </div>
                 </div>
@@ -105,11 +105,11 @@
             const hasher = forge.md.sha256.create().update(p);
             const securePass = hasher.digest().toHex();
             
-            let sPriv = localStorage.getItem(`priv_v10_${u}`), sPub = localStorage.getItem(`pub_v10_${u}`);
+            let sPriv = localStorage.getItem(`priv_v11_${u}`), sPub = localStorage.getItem(`pub_v11_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
                 sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_v10_${u}`, sPriv); localStorage.setItem(`pub_v10_${u}`, sPub);
+                localStorage.setItem(`priv_v11_${u}`, sPriv); localStorage.setItem(`pub_v11_${u}`, sPub);
             }
             myPriv = pki.privateKeyFromPem(sPriv);
 
@@ -141,13 +141,12 @@
 
         async function fetchUsers() { const res = await fetch('/users'); usersRaw = await res.json(); }
 
-        // --- البحث من أول حرف (Index 0) ---
+        // --- البحث اللحظي من أول حرف (Index 0) ---
         function loadUsers() {
             const q = document.getElementById('searchInput').value.toLowerCase().trim();
             const container = document.getElementById('user-list');
             if (q === "") { container.innerHTML = ""; return; }
             
-            // فلترة المستخدمين من الداتابيز
             const filtered = usersRaw.filter(u => 
                 (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) 
                 && u.username !== me.username
@@ -155,7 +154,7 @@
             
             container.innerHTML = filtered.map(u => `
                 <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
-                    <span class="text-[10px] font-black uppercase text-white font-mono">@${u.handle || u.username}</span>
+                    <span class="text-[10px] font-black uppercase text-white font-mono truncate w-32">@${u.handle || u.username}</span>
                     <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
                 </div>`).join('');
         }
@@ -172,9 +171,8 @@
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
-                // جلب أحدث مفتاح للطرف الآخر
-                const res = await fetch('/users');
-                const all = await res.json();
+                const resUsers = await fetch('/users');
+                const all = await resUsers.json();
                 const freshTarget = all.find(u => u.username === target.username);
                 if(!freshTarget || !freshTarget.publicKey) throw new Error("Key Lost");
 
@@ -184,7 +182,7 @@
                 
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
                 input.value = ''; sync();
-            } catch (e) { alert("Encryption Error: Link Compromised"); }
+            } catch (e) { alert("Encryption Error: Handshake Failed"); }
         }
 
         async function sync() {
@@ -217,6 +215,8 @@
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     let d = m.message; const isMe = m.sender === me.username;
                     if(!isMe) { try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Decryption Failed"; } }
+                    else { d = "Packet Transmitted (Secured)"; } // للأمان: المرسل لا يفك تشفير ما أرسله
+                    
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group font-mono">
                         <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-4 rounded-2xl max-w-[80%] relative shadow-lg">
                             <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
