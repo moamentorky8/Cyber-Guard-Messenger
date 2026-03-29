@@ -33,12 +33,11 @@
             <button onclick="toggleTheme()" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition shadow-inner">
                 <span id="theme-icon" class="text-lg">🌙</span>
             </button>
-            <div id="user-badge" class="hidden items-center gap-4">
+            <div id="user-badge-nav" class="hidden flex items-center gap-4">
                 <div class="flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
                     <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
                     <span id="active-user" class="text-xs font-bold mono"></span>
                 </div>
-                <button onclick="logout()" class="bg-red-500/20 text-red-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Logout</button>
             </div>
         </div>
     </nav>
@@ -64,9 +63,13 @@
         </section>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
-            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
+            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
-                <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
+                <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
+                
+                <div class="absolute bottom-4 left-4 right-4">
+                    <button onclick="logout()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Logout Account</button>
+                </div>
             </aside>
 
             <main class="lg:col-span-6 glass rounded-[2rem] flex flex-col overflow-hidden relative border-x border-white/5">
@@ -74,8 +77,8 @@
                     <div class="flex items-center gap-3">
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
                         <div>
-                            <h3 id="t-name" class="font-bold text-sm uppercase italic font-mono">Select Node</h3>
-                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter">RSA_ACTIVE</p>
+                            <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
+                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter">RSA_READY</p>
                         </div>
                     </div>
                 </div>
@@ -104,11 +107,9 @@
             const html = document.documentElement;
             const icon = document.getElementById('theme-icon');
             if (html.classList.contains('dark')) {
-                html.classList.remove('dark');
-                icon.innerText = '☀️';
+                html.classList.remove('dark'); icon.innerText = '☀️';
             } else {
-                html.classList.add('dark');
-                icon.innerText = '🌙';
+                html.classList.add('dark'); icon.innerText = '🌙';
             }
         }
 
@@ -118,14 +119,13 @@
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Credentials Missing");
-            const hasher = forge.md.sha256.create().update(p);
-            const securePass = hasher.digest().toHex();
+            const securePass = forge.md.sha256.create().update(p).digest().toHex();
             
-            let sPriv = localStorage.getItem(`priv_vFinal_${u}`), sPub = localStorage.getItem(`pub_vFinal_${u}`);
+            let sPriv = localStorage.getItem(`priv_vStart_${u}`), sPub = localStorage.getItem(`pub_vStart_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
                 sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_vFinal_${u}`, sPriv); localStorage.setItem(`pub_vFinal_${u}`, sPub);
+                localStorage.setItem(`priv_vStart_${u}`, sPriv); localStorage.setItem(`pub_vStart_${u}`, sPub);
             }
             myPriv = pki.privateKeyFromPem(sPriv);
 
@@ -150,7 +150,7 @@
         function enterTerminal() {
             document.getElementById('setup-section').classList.add('hidden');
             document.getElementById('chat-section').classList.remove('hidden');
-            document.getElementById('user-badge').classList.remove('hidden');
+            document.getElementById('user-badge-nav').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
             setInterval(sync, 1000); fetchUsers();
         }
@@ -214,12 +214,12 @@
                 
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     let d = m.message; const isMe = m.sender === me.username;
-                    if(!isMe) { try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Packet Encrypted"; } }
+                    if(!isMe) { try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Decryption Failed"; } }
                     else { d = "Packet Sent (Secured)"; }
                     
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
                         <div class="${isMe ? 'bg-cyber text-black font-bold' : 'glass'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
-                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[EDITED]' : ''}</p>
+                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
                             <p class="text-xs break-words">${d}</p>
                             ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
