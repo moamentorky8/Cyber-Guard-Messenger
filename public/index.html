@@ -30,14 +30,12 @@
             <p class="text-[10px] font-bold opacity-60 tracking-widest uppercase">Prepared by: Moamen Abdelfattah</p>
         </div>
         <div class="flex items-center gap-4">
-            <button onclick="toggleTheme()" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition shadow-inner">
+            <button onclick="toggleTheme()" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition">
                 <span id="theme-icon" class="text-lg">🌙</span>
             </button>
-            <div id="user-badge-nav" class="hidden flex items-center gap-4">
-                <div class="flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
-                    <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
-                    <span id="active-user" class="text-xs font-bold mono"></span>
-                </div>
+            <div id="user-badge-nav" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
+                <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
+                <span id="active-user" class="text-xs font-bold mono"></span>
             </div>
         </div>
     </nav>
@@ -65,10 +63,9 @@
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
-                <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
-                
+                <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-16"></div>
                 <div class="absolute bottom-4 left-4 right-4">
-                    <button onclick="logout()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Logout Account</button>
+                    <button onclick="logout()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Logout</button>
                 </div>
             </aside>
 
@@ -78,14 +75,14 @@
                         <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
                         <div>
                             <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
-                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter">RSA_READY</p>
+                            <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter">SECURED_RSA_ACTIVE</p>
                         </div>
                     </div>
                 </div>
-                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono"></div>
+                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-sm"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
-                    <input type="text" id="m-input" placeholder="Type secure packet..." class="flex-1 bg-transparent outline-none text-sm px-4">
-                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 active:scale-95 transition-all">
+                    <input type="text" id="m-input" placeholder="Type secure message..." class="flex-1 bg-transparent outline-none text-sm px-4">
+                    <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                     </button>
                 </div>
@@ -106,11 +103,8 @@
         function toggleTheme() {
             const html = document.documentElement;
             const icon = document.getElementById('theme-icon');
-            if (html.classList.contains('dark')) {
-                html.classList.remove('dark'); icon.innerText = '☀️';
-            } else {
-                html.classList.add('dark'); icon.innerText = '🌙';
-            }
+            if (html.classList.contains('dark')) { html.classList.remove('dark'); icon.innerText = '☀️'; }
+            else { html.classList.add('dark'); icon.innerText = '🌙'; }
         }
 
         function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Registration'; }
@@ -121,11 +115,12 @@
             if(!u || !p) return alert("Credentials Missing");
             const securePass = forge.md.sha256.create().update(p).digest().toHex();
             
-            let sPriv = localStorage.getItem(`priv_vStart_${u}`), sPub = localStorage.getItem(`pub_vStart_${u}`);
+            // العودة لنسخة التشفير الأصلية V1 اللي اشتغلت معاك
+            let sPriv = localStorage.getItem(`priv_v1_${u}`), sPub = localStorage.getItem(`pub_v1_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
                 sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_vStart_${u}`, sPriv); localStorage.setItem(`pub_vStart_${u}`, sPub);
+                localStorage.setItem(`priv_v1_${u}`, sPriv); localStorage.setItem(`pub_v1_${u}`, sPub);
             }
             myPriv = pki.privateKeyFromPem(sPriv);
 
@@ -141,10 +136,9 @@
 
         async function saveHandle() {
             const h = document.getElementById('new-handle-input').value.trim();
-            if(!h) return alert("Handle required");
-            let curU = (me && me.username) ? me.username : document.getElementById('username').value.trim().toLowerCase();
-            const res = await fetch('/set-handle', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: curU, handle: h})});
-            if(res.ok) { if(me) me.handle = h; enterTerminal(); }
+            if(!h) return alert("Nickname required");
+            const res = await fetch('/set-handle', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: me.username, handle: h})});
+            if(res.ok) { me.handle = h; enterTerminal(); }
         }
 
         function enterTerminal() {
@@ -163,7 +157,7 @@
             if (q === "") { container.innerHTML = ""; return; }
             const filtered = usersRaw.filter(u => (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) && u.username !== me.username);
             container.innerHTML = filtered.map(u => `<div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
-                <span class="text-[10px] font-black uppercase mono truncate w-32">@${u.handle || u.username}</span>
+                <span class="text-[10px] font-black uppercase truncate w-32">@${u.handle || u.username}</span>
                 <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
             </div>`).join('');
         }
@@ -179,8 +173,9 @@
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
+                // التشفير البسيط (V1)
                 const pubKey = pki.publicKeyFromPem(atob(target.publicKey));
-                const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
+                const packet = forge.util.encode64(pubKey.encrypt(txt)); 
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
                 input.value = ''; sync();
             } catch (e) { alert("Encryption Error"); }
@@ -194,15 +189,15 @@
                 const unique = {};
                 packets.forEach(p => { if(!unique[p.sender]) {
                     try { 
-                        const dec = myPriv.decrypt(forge.util.decode64(p.message), 'RSA-OAEP');
-                        unique[p.sender] = forge.util.decodeUtf8(dec);
-                    } catch(e) { unique[p.sender] = "🔒 Encrypted Message"; }
+                        const dec = myPriv.decrypt(forge.util.decode64(p.message));
+                        unique[p.sender] = dec;
+                    } catch(e) { unique[p.sender] = "🔒 New Message"; }
                 }});
                 document.getElementById('inbox-list').innerHTML = Object.keys(unique).map(s => {
                     const sData = usersRaw.find(u => u.username === s) || {handle: s};
                     return `<div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
                         <div class="notification-dot"></div>
-                        <p class="text-[9px] font-black uppercase text-cyber">@${sData.handle || s}</p>
+                        <p class="text-[9px] font-black uppercase text-cyber font-bold">@${sData.handle || s}</p>
                         <p class="text-[8px] opacity-60 truncate">${unique[s]}</p>
                     </div>`}).join('');
 
@@ -214,13 +209,13 @@
                 
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     let d = m.message; const isMe = m.sender === me.username;
-                    if(!isMe) { try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Decryption Failed"; } }
-                    else { d = "Packet Sent (Secured)"; }
+                    if(!isMe) { try { d = myPriv.decrypt(forge.util.decode64(m.message)); } catch(e) { d = "🔒 Decryption Fail"; } }
+                    else { d = "Packet Transmitted (Secured)"; }
                     
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
                         <div class="${isMe ? 'bg-cyber text-black font-bold' : 'glass'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
-                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
-                            <p class="text-xs break-words">${d}</p>
+                            <p class="text-[7px] uppercase opacity-50 font-black mb-1 font-mono">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
+                            <p class="text-xs break-words font-medium">${d}</p>
                             ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
                                 <span onclick="ui_del('${m.id}')" class="msg-btn text-red-600 ml-2">✖</span>
