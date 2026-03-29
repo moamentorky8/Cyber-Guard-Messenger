@@ -105,7 +105,7 @@
 
         async function handleAuth() {
             const u = document.getElementById('username').value.trim().toLowerCase();
-            const p = document.getElementById('password').value.trim(); // شلنا الـ toLowerCase عشان الباسورد يفضل سملل وكابتل عادي
+            const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Credentials Missing");
 
             const hasher = forge.md.sha256.create();
@@ -125,28 +125,37 @@
             if(res.ok) {
                 me = data;
                 document.getElementById('auth-section').classList.add('hidden');
-                // لو اليوزر مسجل جديد أو الهاندل فاضي يفتح الشاشة
                 if(!me.handle || me.handle === "") document.getElementById('setup-section').classList.remove('hidden');
                 else enterTerminal();
             } else alert(data.error);
         }
 
+        // --- الدالة المصلحة لإنشاء الهوية ---
         async function saveHandle() {
-            const h = document.getElementById('new-handle-input').value.trim();
+            const input = document.getElementById('new-handle-input');
+            const h = input.value.trim();
             if(!h) return alert("Nickname required");
             
-            const res = await fetch('/set-handle', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({username: me.username, handle: h})
-            });
-            
-            if(res.ok) {
-                me.handle = h; enterTerminal();
-            } else {
-                const err = await res.json();
-                alert("Failed: " + err.error);
+            if(!me || !me.username) {
+                alert("Session fault. Relogging...");
+                return logout();
             }
+
+            try {
+                const res = await fetch('/set-handle', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({username: me.username, handle: h})
+                });
+                
+                if(res.ok) {
+                    me.handle = h; 
+                    enterTerminal();
+                } else {
+                    const err = await res.json();
+                    alert("Setup Denied: " + (err.error || "Sync Error"));
+                }
+            } catch (e) { alert("Neural connection failure."); }
         }
 
         function enterTerminal() {
@@ -192,7 +201,7 @@
                 const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
                 input.value = '';
-            } catch (e) { alert("Encryption Error"); }
+            } catch (e) { alert("Handshake Fail"); }
         }
 
         async function sync() {
@@ -228,7 +237,7 @@
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
                         <div class="${isMe ? 'bg-cyber text-black font-medium' : 'glass text-white'} p-4 rounded-2xl max-w-[80%] relative shadow-lg">
                             <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
-                            <p class="text-xs">${d}</p>
+                            <p class="text-xs font-medium">${d}</p>
                             ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
                                 <span onclick="ui_del('${m.id}')" class="msg-btn text-red-500 ml-2">✖</span>
