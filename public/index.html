@@ -130,13 +130,15 @@
             } else alert(data.error);
         }
 
-        // --- الدالة المصلحة لإنشاء الهوية ---
         async function saveHandle() {
             const input = document.getElementById('new-handle-input');
             const h = input.value.trim();
             if(!h) return alert("Nickname required");
             
-            if(!me || !me.username) {
+            // محاولة ذكية لجلب اليوزر نيم لو الجلسة me فقدت لسبب ما
+            let currentUsername = (me && me.username) ? me.username : document.getElementById('username').value.trim().toLowerCase();
+            
+            if(!currentUsername) {
                 alert("Session fault. Relogging...");
                 return logout();
             }
@@ -145,11 +147,11 @@
                 const res = await fetch('/set-handle', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({username: me.username, handle: h})
+                    body: JSON.stringify({username: currentUsername, handle: h})
                 });
                 
                 if(res.ok) {
-                    me.handle = h; 
+                    if(me) me.handle = h;
                     enterTerminal();
                 } else {
                     const err = await res.json();
