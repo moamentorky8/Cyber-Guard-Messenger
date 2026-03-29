@@ -19,6 +19,7 @@
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-all text-[12px] ml-2 cursor-pointer hover:text-cyber inline-block; }
+        .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen p-4 flex flex-col">
@@ -100,11 +101,11 @@
             const hasher = forge.md.sha256.create().update(p);
             const securePass = hasher.digest().toHex();
             
-            let sPriv = localStorage.getItem(`priv_vSimple_${u}`), sPub = localStorage.getItem(`pub_vSimple_${u}`);
+            let sPriv = localStorage.getItem(`priv_vFinalFix_${u}`), sPub = localStorage.getItem(`pub_vFinalFix_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
                 sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`priv_vSimple_${u}`, sPriv); localStorage.setItem(`pub_vSimple_${u}`, sPub);
+                localStorage.setItem(`priv_vFinalFix_${u}`, sPriv); localStorage.setItem(`pub_vFinalFix_${u}`, sPub);
             }
             myPriv = pki.privateKeyFromPem(sPriv);
 
@@ -131,7 +132,7 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-            setInterval(sync, 1500); fetchUsers();
+            setInterval(sync, 1000); fetchUsers();
         }
 
         async function fetchUsers() { const res = await fetch('/users'); usersRaw = await res.json(); }
@@ -158,22 +159,24 @@
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
+                // جلب بيانات الطرف الآخر فوراً لضمان وجود المفتاح الصحيح
                 const resU = await fetch('/users');
                 const all = await resU.json();
                 const freshTarget = all.find(u => u.username === target.username);
-                
+                if(!freshTarget || !freshTarget.publicKey) throw new Error();
+
                 const pubKey = pki.publicKeyFromPem(atob(freshTarget.publicKey));
                 const packet = forge.util.encode64(pubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: packet})});
                 input.value = ''; sync();
-            } catch (e) { alert("Encryption Error"); }
+            } catch (e) { alert("Handshake Error: Link Failed"); }
         }
 
         async function sync() {
             if(!me) return;
             try {
-                // Inbox Logic
+                // 1. تحديث الـ Inbox
                 const inRes = await fetch(`/messages/${me.username}`);
                 const packets = await inRes.json();
                 const unique = {};
@@ -182,10 +185,9 @@
                         try { 
                             const dec = myPriv.decrypt(forge.util.decode64(p.message), 'RSA-OAEP');
                             unique[p.sender] = forge.util.decodeUtf8(dec);
-                        } catch(e) { unique[p.sender] = "🔒 New Message"; }
+                        } catch(e) { unique[p.sender] = "🔒 Encrypted Message"; }
                     }
                 }
-                
                 document.getElementById('inbox-list').innerHTML = Object.keys(unique).map(s => {
                     const sData = usersRaw.find(u => u.username === s) || {handle: s};
                     return `<div onclick='openFromInbox("${s}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
@@ -195,6 +197,7 @@
                     </div>`}).join('');
 
                 if(!target) return;
+                // 2. تحديث الشات النشط
                 const res = await fetch(`/messages-full/${me.username}/${target.username}`);
                 const msgs = await res.json();
                 if(msgs.length === lastLen) return;
@@ -204,21 +207,22 @@
                 for (const m of msgs) {
                     const isMe = m.sender === me.username;
                     let display = "";
-                    
                     if (isMe) {
-                        display = `<span class="opacity-50 italic">Packet Sent (Secured)</span>`;
+                        display = `<span class="opacity-50 italic">Secure Packet Transmitted</span>`;
                     } else {
                         try {
                             const dec = myPriv.decrypt(forge.util.decode64(m.message), 'RSA-OAEP');
                             display = forge.util.decodeUtf8(dec);
-                        } catch(e) { display = `<span class="text-red-400">🔒 Encrypted Packet</span>`; }
+                        } catch(e) { display = `<span class="text-red-400 font-bold">🔒 Decryption Locked</span>`; }
                     }
-                    
                     html += `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
                         <div class="${isMe ? 'bg-cyber text-black font-bold' : 'glass text-white'} p-4 rounded-2xl max-w-[85%] relative shadow-lg">
-                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender}</p>
+                            <p class="text-[7px] uppercase opacity-50 font-black mb-1">${m.sender} ${m.edited ? '[CORRECTED]' : ''}</p>
                             <p class="text-xs break-words">${display}</p>
-                            ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all"><span onclick="ui_del('${m.id}')" class="msg-btn text-red-600">✖</span></div>` : ''}
+                            ${isMe ? `<div class="mt-2 text-right border-t border-black/10 pt-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
+                                <span onclick="ui_del('${m.id}')" class="msg-btn text-red-600 ml-2">✖</span>
+                            </div>` : ''}
                         </div></div>`;
                 }
                 document.getElementById('msgs-box').innerHTML = html;
@@ -226,6 +230,13 @@
             } catch(e) {}
         }
 
+        async function ui_edit(id) {
+            const n = prompt("Correct payload:");
+            if(n) { await fetch('/edit-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, newVal: n})}); lastLen = 0; }
+        }
+        async function ui_del(id) {
+            if(confirm("Destroy historical data?")) { await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})}); lastLen = 0; }
+        }
         function openFromInbox(s) { const u = usersRaw.find(x => x.username === s); if(u) setTarget(u); }
         function logout() { localStorage.clear(); location.reload(); }
         async function handleReset() {
@@ -235,7 +246,6 @@
                 await fetch('/reset-pass', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, newPassword:sNew})});
             }
         }
-        async function ui_del(id) { if(confirm("Delete?")) { await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})}); lastLen = 0; } }
     </script>
 </body>
 </html>
