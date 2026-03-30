@@ -4,12 +4,12 @@ const admin = require("firebase-admin");
 
 const app = express();
 
-// 1. تحصين استقبال البيانات لضمان عدم سقوط الـ Node process
-app.use(express.json({ limit: '10mb' })); // 10 ميجا كافية جداً للتشفير وتمنع استنزاف الرام
+// 1. تحصين استقبال البيانات (حاسم لعمل التشفير ومنع انهيار السيرفر)
+app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 2. إعداد Firebase مع صمام أمان للاتصال
+// 2. إعداد Firebase بصمام أمان (Neural Link)
 let db;
 try {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
@@ -23,17 +23,21 @@ try {
         });
     }
     db = admin.database();
+    console.log("🛡️ Firebase Neural Link: ACTIVE");
 } catch (e) {
-    console.error("❌ Firebase neural link failure.");
+    console.error("❌ Firebase Link Failed.");
 }
 
-const validateLink = (req, res, next) => {
-    if (!db) return res.status(503).json({ error: "Database Offline" });
+// Middleware لمنع انهيار السيرفر في حال تعثر الاتصال
+const validateDB = (req, res, next) => {
+    if (!db) return res.status(503).json({ error: "Terminal Offline" });
     next();
 };
 
-// 3. مسارات الوصول (Identity)
-app.post('/auth', validateLink, async (req, res) => {
+// --- 3. المسارات (Routes) ---
+
+// توثيق الهوية (Login & Register)
+app.post('/auth', validateDB, async (req, res) => {
     try {
         const { username, password, publicKey, isLogin } = req.body;
         const u = username.toLowerCase().trim();
@@ -43,6 +47,7 @@ app.post('/auth', validateLink, async (req, res) => {
 
         if (isLogin) {
             if (!user || user.password !== password) return res.status(401).json({ error: "Denied" });
+            // تحديث الـ PublicKey لضمان إمكانية التواصل دائماً
             await ref.update({ publicKey, lastSeen: Date.now() });
             return res.json({ username: u, handle: user.handle || "", publicKey: publicKey });
         } else {
@@ -50,46 +55,27 @@ app.post('/auth', validateLink, async (req, res) => {
             await ref.set({ username: u, password, publicKey, lastSeen: Date.now(), handle: "" });
             return res.status(201).json({ success: true });
         }
-    } catch (err) { res.status(500).json({ error: "Internal Fault" }); }
+    } catch (err) { res.status(500).json({ error: "Auth Fault" }); }
 });
 
-// 4. المحرك الأساسي (Messenger Engine) - تحصين فيرسيل هنا
-app.get('/messages-full/:u1/:u2', validateLink, async (req, res) => {
+// إرسال الرسائل (Secure Packet Dispatch)
+app.post('/send', validateDB, async (req, res) => {
     try {
-        const { u1, u2 } = req.params;
-        // القضاء على جراثيم "فلترة الرام": هنجيب آخر 100 رسالة فقط لتقليل استهلاك الذاكرة
-        const snap = await db.ref("messages").limitToLast(100).once("value");
-        const data = snap.val() || {};
-        
-        // فلترة سريعة جداً
-        const filtered = Object.values(data).filter(m => 
-            (m.sender === u1 && m.receiver === u2) || (m.sender === u2 && m.receiver === u1)
-        ).sort((a, b) => a.timestamp - b.timestamp);
-        
-        return res.json(filtered);
-    } catch (e) { res.json([]); }
-});
-
-app.post('/send', validateLink, async (req, res) => {
-    try {
-        const { sender, receiver, message } = req.body;
-        if (!message) return res.status(400).json({ error: "Packet Empty" });
-
         const msgRef = db.ref("messages").push();
         await msgRef.set({
-            sender, receiver, message,
-            timestamp: Date.now(),
+            ...req.body,
             id: msgRef.key,
+            timestamp: Date.now(),
             edited: false
         });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Failed" }); }
+    } catch (e) { res.status(500).json({ error: "Link Failure" }); }
 });
 
-app.get('/users', validateLink, async (req, res) => {
+// جلب المستخدمين (Discovery)
+app.get('/users', validateDB, async (req, res) => {
     try {
-        // سحب اليوزرات مع استثناء البيانات الحساسة فوراً
-        const snap = await db.ref("users").limitToFirst(50).once("value");
+        const snap = await db.ref("users").once("value");
         const data = snap.val() || {};
         const list = Object.values(data).map(u => ({
             username: u.username,
@@ -101,26 +87,63 @@ app.get('/users', validateLink, async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// 5. العمليات التاريخية (Correction)
-app.post('/edit-msg', validateLink, async (req, res) => {
+// جلب المحادثة الكاملة (Neural Sync)
+app.get('/messages-full/:u1/:u2', validateDB, async (req, res) => {
     try {
-        await db.ref(`messages/${req.body.id}`).update({ 
-            message: req.body.newVal, 
-            edited: true 
-        });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Fail" }); }
+        // جلب آخر 100 رسالة فقط لضمان عدم استهلاك رامات Vercel
+        const snap = await db.ref("messages").limitToLast(100).once("value");
+        const all = Object.values(snap.val() || {});
+        const filtered = all.filter(m => 
+            (m.sender === req.params.u1 && m.receiver === req.params.u2) || 
+            (m.sender === req.params.u2 && m.receiver === req.params.u1)
+        ).sort((a,b) => a.timestamp - b.timestamp);
+        res.json(filtered);
+    } catch (e) { res.json([]); }
 });
 
-app.post('/del-msg', validateLink, async (req, res) => {
+// جلب رسائل الـ Inbox
+app.get('/messages/:user', validateDB, async (req, res) => {
+    try {
+        const snap = await db.ref("messages")
+            .orderByChild("receiver")
+            .equalTo(req.params.user)
+            .limitToLast(20)
+            .once("value");
+        res.json(Object.values(snap.val() || {}));
+    } catch (e) { res.json([]); }
+});
+
+// إدارة الهوية والرسائل
+app.post('/set-handle', validateDB, async (req, res) => {
+    try {
+        await db.ref(`users/${req.body.username.toLowerCase()}`).update({ handle: req.body.handle });
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(); }
+});
+
+app.post('/edit-msg', validateDB, async (req, res) => {
+    try {
+        await db.ref(`messages/${req.body.id}`).update({ message: req.body.newVal, edited: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(); }
+});
+
+app.post('/del-msg', validateDB, async (req, res) => {
     try {
         await db.ref(`messages/${req.body.id}`).remove();
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Fail" }); }
+    } catch (e) { res.status(500).send(); }
 });
 
-// توجيه نهائي لـ فيرسيل
+app.post('/reset-pass', validateDB, async (req, res) => {
+    try {
+        await db.ref(`users/${req.body.username.toLowerCase()}`).update({ password: req.body.newPassword });
+        res.json({ success: true });
+    } catch (e) { res.status(500).send(); }
+});
+
+// توجيه نهائي لـ Vercel
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🛡️ Cyber-Core Operational`));
+app.listen(PORT, () => console.log(`🛡️ Cyber Messenger Server - Operational on Port ${PORT}`));
