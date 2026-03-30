@@ -1,13 +1,15 @@
 const express = require('express');
-const crypto = require('crypto');
 const path = require('path');
 const admin = require("firebase-admin");
 
 const app = express();
-app.use(express.json());
+
+// 1. تحصين استقبال البيانات لضمان عدم سقوط الـ Node process
+app.use(express.json({ limit: '10mb' })); // 10 ميجا كافية جداً للتشفير وتمنع استنزاف الرام
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- 1. إعداد Firebase بصمام أمان ---
+// 2. إعداد Firebase مع صمام أمان للاتصال
 let db;
 try {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
@@ -21,146 +23,104 @@ try {
         });
     }
     db = admin.database();
-    console.log("🛡️ Firebase Neural Link: ACTIVE");
 } catch (e) {
-    console.error("❌ Firebase Link Failed.");
+    console.error("❌ Firebase neural link failure.");
 }
 
-// Middleware لمنع الانهيار (Critical for Vercel stability)
 const validateLink = (req, res, next) => {
-    if (!db) return res.status(503).json({ error: "Terminal Offline" });
+    if (!db) return res.status(503).json({ error: "Database Offline" });
     next();
 };
 
-// --- 2. Identity & Access Routes ---
-
+// 3. مسارات الوصول (Identity)
 app.post('/auth', validateLink, async (req, res) => {
     try {
         const { username, password, publicKey, isLogin } = req.body;
-        if (!username || !password) return res.status(400).json({ error: "Missing Credentials" });
-
         const u = username.toLowerCase().trim();
         const ref = db.ref(`users/${u}`);
         const snap = await ref.once("value");
         const user = snap.val();
 
         if (isLogin) {
-            if (!user || user.password !== password) {
-                return res.status(401).json({ error: "Denied" });
-            }
+            if (!user || user.password !== password) return res.status(401).json({ error: "Denied" });
             await ref.update({ publicKey, lastSeen: Date.now() });
-            return res.json({ username: u, handle: user.handle || "", publicKey: user.publicKey });
+            return res.json({ username: u, handle: user.handle || "", publicKey: publicKey });
         } else {
             if (snap.exists()) return res.status(400).json({ error: "Taken" });
-            await ref.set({ 
-                username: u, 
-                password: password, 
-                publicKey: publicKey, 
-                lastSeen: Date.now(), 
-                handle: "" 
-            });
+            await ref.set({ username: u, password, publicKey, lastSeen: Date.now(), handle: "" });
             return res.status(201).json({ success: true });
         }
-    } catch (err) { 
-        return res.status(500).json({ error: "Fault" }); 
-    }
+    } catch (err) { res.status(500).json({ error: "Internal Fault" }); }
 });
 
-// --- 3. Discovery & Messenger Engine ---
-
-app.get('/users', validateLink, async (req, res) => {
+// 4. المحرك الأساسي (Messenger Engine) - تحصين فيرسيل هنا
+app.get('/messages-full/:u1/:u2', validateLink, async (req, res) => {
     try {
-        const snap = await db.ref("users").once("value");
+        const { u1, u2 } = req.params;
+        // القضاء على جراثيم "فلترة الرام": هنجيب آخر 100 رسالة فقط لتقليل استهلاك الذاكرة
+        const snap = await db.ref("messages").limitToLast(100).once("value");
         const data = snap.val() || {};
-        const userList = Object.values(data).map(u => ({
-            username: u.username,
-            handle: u.handle || u.username,
-            publicKey: u.publicKey,
-            status: (Date.now() - (u.lastSeen || 0) < 60000) ? "online" : "offline"
-        }));
-        return res.json(userList);
-    } catch (e) { 
-        return res.json([]); 
-    }
+        
+        // فلترة سريعة جداً
+        const filtered = Object.values(data).filter(m => 
+            (m.sender === u1 && m.receiver === u2) || (m.sender === u2 && m.receiver === u1)
+        ).sort((a, b) => a.timestamp - b.timestamp);
+        
+        return res.json(filtered);
+    } catch (e) { res.json([]); }
 });
 
 app.post('/send', validateLink, async (req, res) => {
     try {
+        const { sender, receiver, message } = req.body;
+        if (!message) return res.status(400).json({ error: "Packet Empty" });
+
         const msgRef = db.ref("messages").push();
-        await msgRef.set({ ...req.body, id: msgRef.key, timestamp: Date.now(), edited: false });
-        return res.json({ success: true });
-    } catch (e) { 
-        return res.status(500).json({ error: "Fail" }); 
-    }
+        await msgRef.set({
+            sender, receiver, message,
+            timestamp: Date.now(),
+            id: msgRef.key,
+            edited: false
+        });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
-app.get('/messages-full/:u1/:u2', validateLink, async (req, res) => {
+app.get('/users', validateLink, async (req, res) => {
     try {
-        // تحسين البحث لتقليل استهلاك الذاكرة في فيرسيل
-        const snap = await db.ref("messages").limitToLast(200).once("value");
-        const all = Object.values(snap.val() || {});
-        const filtered = all.filter(m => 
-            (m.sender === req.params.u1 && m.receiver === req.params.u2) || 
-            (m.sender === req.params.u2 && m.receiver === req.params.u1)
-        ).sort((a,b) => a.timestamp - b.timestamp);
-        return res.json(filtered);
-    } catch (e) { 
-        return res.json([]); 
-    }
+        // سحب اليوزرات مع استثناء البيانات الحساسة فوراً
+        const snap = await db.ref("users").limitToFirst(50).once("value");
+        const data = snap.val() || {};
+        const list = Object.values(data).map(u => ({
+            username: u.username,
+            handle: u.handle || u.username,
+            publicKey: u.publicKey,
+            status: (Date.now() - (u.lastSeen || 0) < 120000) ? "online" : "offline"
+        }));
+        res.json(list);
+    } catch (e) { res.json([]); }
 });
 
-app.get('/messages/:user', validateLink, async (req, res) => {
-    try {
-        const snap = await db.ref("messages").orderByChild("receiver").equalTo(req.params.user).limitToLast(50).once("value");
-        return res.json(Object.values(snap.val() || {}));
-    } catch (e) { 
-        return res.json([]); 
-    }
-});
-
-// --- 4. Historical Correction & Management ---
-
-app.post('/set-handle', validateLink, async (req, res) => {
-    try {
-        const { username, handle } = req.body;
-        await db.ref(`users/${username.toLowerCase()}`).update({ handle });
-        return res.json({ success: true });
-    } catch (e) { 
-        return res.status(500).json({ error: "Fail" }); 
-    }
-});
-
+// 5. العمليات التاريخية (Correction)
 app.post('/edit-msg', validateLink, async (req, res) => {
     try {
-        await db.ref(`messages/${req.body.id}`).update({ message: req.body.newVal, edited: true });
-        return res.json({ success: true });
-    } catch (e) { 
-        return res.status(500).json({ error: "Fail" }); 
-    }
+        await db.ref(`messages/${req.body.id}`).update({ 
+            message: req.body.newVal, 
+            edited: true 
+        });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Fail" }); }
 });
 
 app.post('/del-msg', validateLink, async (req, res) => {
     try {
         await db.ref(`messages/${req.body.id}`).remove();
-        return res.json({ success: true });
-    } catch (e) { 
-        return res.status(500).json({ error: "Fail" }); 
-    }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Fail" }); }
 });
 
-app.post('/reset-pass', validateLink, async (req, res) => {
-    try {
-        await db.ref(`users/${req.body.username.toLowerCase()}`).update({ password: req.body.newPassword });
-        return res.json({ success: true });
-    } catch (e) { 
-        return res.status(500).json({ error: "Fail" }); 
-    }
-});
-
-// --- 5. Terminal Deployment ---
+// توجيه نهائي لـ فيرسيل
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🛡️ Cyber Messenger Server - Operational on Port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🛡️ Cyber-Core Operational`));
