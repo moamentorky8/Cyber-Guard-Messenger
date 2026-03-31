@@ -3,7 +3,7 @@ const path = require('path');
 const admin = require("firebase-admin");
 
 const app = express();
-app.use(express.json({ limit: '15mb' })); // مساحة أكبر للتشفير المزدوج
+app.use(express.json({ limit: '15mb' })); 
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db;
@@ -19,10 +19,9 @@ try {
         });
     }
     db = admin.database();
-    console.log("🛡️ Neural Link: ACTIVE (WhatsApp Mode)");
 } catch (e) { console.error("Firebase Error"); }
 
-// --- التعديل الجوهري هنا ---
+// --- التعديل اللي هيخلي الرسايل تظهر في الصورة الجاية ---
 app.post('/send', async (req, res) => {
     try {
         const { sender, receiver, message, senderCopy } = req.body;
@@ -32,16 +31,16 @@ app.post('/send', async (req, res) => {
             sender,
             receiver,
             message,      // نسخة المستقبل
-            senderCopy,   // نسختك إنت (عشان تظهر عندك)
+            senderCopy,   // نسختك إنت (دي اللي ناقصة في صورتك!)
             id: msgRef.key,
             timestamp: Date.now(),
             edited: false
         });
         res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Transmission Fail" }); }
+    } catch (e) { res.status(500).json({ error: "Fail" }); }
 });
 
-// تأكد إن مسار جلب الرسايل بيجيب الـ Object كامل
+// باقي المسارات (Messages-Full)
 app.get('/messages-full/:u1/:u2', async (req, res) => {
     try {
         const snap = await db.ref("messages").limitToLast(50).once("value");
@@ -54,7 +53,7 @@ app.get('/messages-full/:u1/:u2', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
-// باقي المسارات (Auth, Users, Handle) زي ما هي بالظبط
+// مسارات الـ Auth والـ Handle (بدون تغيير)
 app.post('/auth', async (req, res) => {
     try {
         const { username, password, publicKey, isLogin } = req.body;
@@ -92,4 +91,4 @@ app.post('/set-handle', async (req, res) => {
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-module.exports = app; // مهم جداً لـ Vercel
+module.exports = app;
