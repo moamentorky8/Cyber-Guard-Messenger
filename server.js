@@ -4,12 +4,12 @@ const admin = require("firebase-admin");
 
 const app = express();
 
-// 1. إعدادات استقبال البيانات (حماية من النصوص الطويلة جداً)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// 1. إعدادات استقبال البيانات (تحصين ضد النصوص المشفرة الطويلة)
+app.use(express.json({ limit: '15mb' })); // زودت المساحة شوية عشان الرسالة بقت نسختين
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 2. ربط Firebase (تأكد من وجود ملف المفتاح أو الـ Environment Variable)
+// 2. ربط Firebase
 let db;
 try {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
@@ -23,18 +23,17 @@ try {
         });
     }
     db = admin.database();
-    console.log("🛡️ Neural Link: ACTIVE");
+    console.log("🛡️ Neural Link: ACTIVE (E2EE Optimized)");
 } catch (e) {
-    console.error("❌ Firebase Connection Error:", e.message);
+    console.error("❌ Firebase Error:", e.message);
 }
 
-// Middleware لمنع الانهيار لو الداتابيز مش واصلة
 const checkDB = (req, res, next) => {
     if (!db) return res.status(503).json({ error: "Database Offline" });
     next();
 };
 
-// --- 3. مسارات المستخدمين (Identity) ---
+// --- 3. مسارات الهوية (بدون تغيير) ---
 
 app.post('/auth', checkDB, async (req, res) => {
     try {
@@ -46,7 +45,6 @@ app.post('/auth', checkDB, async (req, res) => {
 
         if (isLogin) {
             if (!user || user.password !== password) return res.status(401).json({ error: "Denied" });
-            // تحديث المفتاح العام والظهور الأخير
             await ref.update({ publicKey, lastSeen: Date.now() });
             return res.json({ username: u, handle: user.handle || "", publicKey: publicKey });
         } else {
@@ -79,21 +77,18 @@ app.post('/set-handle', checkDB, async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Fail" }); }
 });
 
-app.post('/reset-pass', checkDB, async (req, res) => {
-    try {
-        const { username, newPassword } = req.body;
-        await db.ref(`users/${username.toLowerCase()}`).update({ password: newPassword });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Fail" }); }
-});
-
-// --- 4. مسارات الرسائل (Messenger Engine) ---
+// --- 4. مسارات الرسائل (التعديل هنا ليتماشى مع التشفير المزدوج) ---
 
 app.post('/send', checkDB, async (req, res) => {
     try {
+        const { sender, receiver, message, senderCopy } = req.body;
         const msgRef = db.ref("messages").push();
+        
         await msgRef.set({
-            ...req.body,
+            sender,
+            receiver,
+            message,      // النسخة المشفرة للمستلم
+            senderCopy,   // النسخة المشفرة للمرسل (عشان تظهر عندك)
             id: msgRef.key,
             timestamp: Date.now(),
             edited: false
@@ -128,7 +123,12 @@ app.get('/messages/:user', checkDB, async (req, res) => {
 app.post('/edit-msg', checkDB, async (req, res) => {
     try {
         const { id, newVal } = req.body;
-        await db.ref(`messages/${id}`).update({ message: newVal, edited: true });
+        // ملاحظة: الـ newVal هنا لازم يكون Packet مشفرة برضه من الاندكس
+        await db.ref(`messages/${id}`).update({ 
+            message: newVal, 
+            senderCopy: newVal, // بنحدث النسختين في التعديل
+            edited: true 
+        });
         res.json({ success: true });
     } catch (e) { res.status(500).send(); }
 });
@@ -140,9 +140,8 @@ app.post('/del-msg', checkDB, async (req, res) => {
     } catch (e) { res.status(500).send(); }
 });
 
-// --- 5. التشغيل النهائي ---
+// --- 5. التشغيل ---
 
-// أي طلب غير معروف يوجه لـ index.html
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = process.env.PORT || 3000;
