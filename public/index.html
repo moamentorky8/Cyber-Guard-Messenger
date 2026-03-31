@@ -79,7 +79,7 @@
                         </div>
                     </div>
                 </div>
-                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs"></div>
+                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs text-white"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
                     <input type="text" id="m-input" placeholder="Type secure message..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
                     <button id="send-btn" onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 transition-all">
@@ -177,26 +177,42 @@
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
+                const myUserClean = me.username.trim().toLowerCase();
+                const targetUserClean = target.username.trim().toLowerCase();
+
                 const targetPubKey = pki.publicKeyFromPem(atob(target.publicKey));
                 const msgForReceiver = forge.util.encode64(targetPubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
                 const myPubKey = pki.publicKeyFromPem(myPubPem);
                 const msgForMe = forge.util.encode64(myPubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
-                await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: me.username, receiver: target.username, message: msgForReceiver, senderCopy: msgForMe})});
-                input.value = ''; sync();
+
+                await fetch('/send', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({
+                        sender: myUserClean, 
+                        receiver: targetUserClean, 
+                        message: msgForReceiver,
+                        senderCopy: msgForMe
+                    })
+                });
+                input.value = ''; 
+                lastLen = 0; 
+                sync();
             } catch (e) { alert("Encryption Error"); }
         }
 
         async function sync() {
             if(!me) return;
             try {
-                const inRes = await fetch(`/messages/${me.username.trim().toLowerCase()}`);
+                const myClean = me.username.trim().toLowerCase();
+                const inRes = await fetch(`/messages/${myClean}`);
                 const packets = await inRes.json();
                 const unique = {};
                 packets.forEach(p => { 
                     const pSender = p.sender.trim().toLowerCase();
                     if(!unique[pSender]) {
                         try { 
-                            const isMeSender = pSender === me.username.trim().toLowerCase();
+                            const isMeSender = pSender === myClean;
                             const encryptedPart = isMeSender ? p.senderCopy : p.message;
                             if (encryptedPart) {
                                 const dec = myPriv.decrypt(forge.util.decode64(encryptedPart), 'RSA-OAEP');
@@ -214,14 +230,14 @@
                     </div>`}).join('');
 
                 if(!target) return;
-                const res = await fetch(`/messages-full/${me.username.trim().toLowerCase()}/${target.username.trim().toLowerCase()}`);
+                const targetClean = target.username.trim().toLowerCase();
+                const res = await fetch(`/messages-full/${myClean}/${targetClean}`);
                 const msgs = await res.json();
                 if(msgs.length === lastLen) return;
                 lastLen = msgs.length;
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     const mSender = m.sender.trim().toLowerCase();
-                    const meUser = me.username.trim().toLowerCase();
-                    const isMe = mSender === meUser;
+                    const isMe = mSender === myClean;
                     let displayMsg = "";
                     try {
                         const encryptedPart = isMe ? m.senderCopy : m.message;
@@ -254,4 +270,4 @@
         }
     </script>
 </body>
-</html>
+</html>                
