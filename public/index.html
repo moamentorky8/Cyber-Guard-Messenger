@@ -102,8 +102,9 @@
 
         function toggleTheme() {
             const html = document.documentElement;
-            if (html.classList.contains('dark')) { html.classList.remove('dark'); document.getElementById('theme-icon').innerText = '☀️'; }
-            else { html.classList.add('dark'); document.getElementById('theme-icon').innerText = '🌙'; }
+            const icon = document.getElementById('theme-icon');
+            if (html.classList.contains('dark')) { html.classList.remove('dark'); icon.innerText = '☀️'; }
+            else { html.classList.add('dark'); icon.innerText = '🌙'; }
         }
 
         function toggleAuth() { isLogin = !isLogin; document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Registration'; }
@@ -111,15 +112,19 @@
         async function handleAuth() {
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
-            if(!u || !p) return alert("Missing Info");
+            if(!u || !p) return alert("Credentials Missing");
             const securePass = forge.md.sha256.create().update(p).digest().toHex();
+            
             let sPriv = localStorage.getItem(`priv_vFinal_${u}`), sPub = localStorage.getItem(`pub_vFinal_${u}`);
             if(!sPriv) {
                 const pair = pki.rsa.generateKeyPair(1024);
-                sPriv = pki.privateKeyToPem(pair.privateKey); sPub = pki.publicKeyToPem(pair.publicKey);
+                sPriv = pki.privateKeyToPem(pair.privateKey); 
+                sPub = pki.publicKeyToPem(pair.publicKey);
                 localStorage.setItem(`priv_vFinal_${u}`, sPriv); localStorage.setItem(`pub_vFinal_${u}`, sPub);
             }
-            myPriv = pki.privateKeyFromPem(sPriv); myPubPem = sPub;
+            myPriv = pki.privateKeyFromPem(sPriv);
+            myPubPem = sPub;
+
             const res = await fetch('/auth', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username:u, password:securePass, publicKey:btoa(sPub), isLogin})});
             const data = await res.json();
             if(res.ok) { me = data; document.getElementById('auth-section').classList.add('hidden'); if(!me.handle) document.getElementById('setup-section').classList.remove('hidden'); else enterTerminal(); } else alert(data.error);
@@ -149,7 +154,7 @@
             const container = document.getElementById('user-list');
             if (q === "") { container.innerHTML = ""; return; }
             const filtered = usersRaw.filter(u => (u.username.toLowerCase().includes(q) || (u.handle && u.handle.toLowerCase().includes(q))) && u.username !== me.username);
-            container.innerHTML = filtered.map(u => `<div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all">
+            container.innerHTML = filtered.map(u => `<div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
                 <span class="text-[10px] font-black uppercase text-white truncate w-32">@${u.handle || u.username}</span>
                 <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
             </div>`).join('');
@@ -164,24 +169,28 @@
 
         async function dispatchMsg() {
             const input = document.getElementById('m-input'), txt = input.value.trim();
-            if(!txt || !target) return;
+            if(!txt || !target || !target.publicKey) return alert("Target node not ready");
             try {
                 const myClean = me.username.trim().toLowerCase();
                 const targetClean = target.username.trim().toLowerCase();
+                
+                // تشفير المستقبل
                 const targetPubKey = pki.publicKeyFromPem(atob(target.publicKey));
                 const msgForReceiver = forge.util.encode64(targetPubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
+                
+                // تشفير المرسل (نسختك)
                 const myPubKey = pki.publicKeyFromPem(myPubPem);
                 const msgForMe = forge.util.encode64(myPubKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP'));
+
                 await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sender: myClean, receiver: targetClean, message: msgForReceiver, senderCopy: msgForMe})});
                 input.value = ''; lastLen = 0; sync();
-            } catch (e) { alert("Encryption Error"); }
+            } catch (e) { alert("Key Conflict: Handshake Failed"); }
         }
 
         async function sync() {
             if(!me) return;
             try {
                 const myClean = me.username.trim().toLowerCase();
-                // 1. Inbox
                 const inRes = await fetch(`/messages/${myClean}`);
                 const inData = await inRes.json();
                 const unique = {};
@@ -190,8 +199,8 @@
                     if(!unique[s]) {
                         try {
                             const part = (s === myClean) ? p.senderCopy : p.message;
-                            unique[s] = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(part), 'RSA-OAEP'));
-                        } catch(e) { unique[s] = "🔒 Packet"; }
+                            if(part) unique[s] = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(part), 'RSA-OAEP'));
+                        } catch(e) { unique[s] = "🔒 Encrypted"; }
                     }
                 });
                 document.getElementById('inbox-list').innerHTML = Object.keys(unique).map(s => {
@@ -202,7 +211,6 @@
                     </div>`}).join('');
 
                 if(!target) return;
-                // 2. Chat
                 const res = await fetch(`/messages-full/${myClean}/${target.username.trim().toLowerCase()}`);
                 const msgs = await res.json();
                 if(msgs.length === lastLen) return;
@@ -210,10 +218,10 @@
                 document.getElementById('msgs-box').innerHTML = msgs.map(m => {
                     const isMe = m.sender.trim().toLowerCase() === myClean;
                     let d = "";
-                    try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(isMe ? m.senderCopy : m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Error"; }
+                    try { d = forge.util.decodeUtf8(myPriv.decrypt(forge.util.decode64(isMe ? m.senderCopy : m.message), 'RSA-OAEP')); } catch(e) { d = "🔒 Decryption Fail"; }
                     return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up">
-                        <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-3 rounded-2xl max-w-[85%] mb-2 shadow-lg">
-                            <p class="text-[7px] opacity-50 mb-1">${m.sender}</p>
+                        <div class="${isMe ? 'bg-cyber text-black font-bold' : 'glass text-white'} p-3 rounded-2xl max-w-[85%] mb-2 shadow-lg">
+                            <p class="text-[7px] opacity-50 mb-1 uppercase">${m.sender}</p>
                             <p class="text-xs break-words">${d}</p>
                             ${isMe ? `<div class="mt-1 border-t border-black/10 pt-1 text-right"><span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span><span onclick="ui_del('${m.id}')" class="msg-btn text-red-600">✖</span></div>` : ''}
                         </div></div>`;
