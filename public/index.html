@@ -1,435 +1,254 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-    <script>tailwind.config = { darkMode: 'class', theme: { extend: { colors: { cyber: '#06b6d4' } } } }</script>
-    <style>
-        body { font-family: 'Inter', sans-serif; user-select: none !important; }
-        .glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
-        .chat-area::-webkit-scrollbar { width: 4px; }
-        .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
-        .animate-slide-up { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .msg-btn { @apply text-[10px] ml-2 opacity-60 hover:opacity-100 hover:text-cyber transition-all cursor-pointer; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+
+<script>
+tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: { cyber: '#06b6d4' } } }
+}
+</script>
+
+<style>
+body { font-family: 'Inter', sans-serif; user-select: none !important; }
+.glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
+.chat-area::-webkit-scrollbar { width: 4px; }
+.chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
 </head>
+
 <body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen p-4 flex flex-col">
 
-    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg rounded-2xl mb-6">
-        <div class="flex flex-col">
-            <h1 class="text-xl font-black text-cyber uppercase italic font-mono">Cyber Messenger</h1>
-            <p class="text-[10px] font-bold opacity-60 uppercase">Prepared by: Moamen Abdelfattah</p>
-        </div>
-        <div id="user-badge-nav" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
-            <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
-            <span id="active-user" class="text-xs font-bold text-cyber mono"></span>
-        </div>
-    </nav>
+<nav class="glass px-6 py-4 rounded-2xl mb-6 flex justify-between">
+    <h1 class="text-cyber font-black">Cyber Messenger</h1>
+    <span id="active-user"></span>
+</nav>
 
-    <main class="max-w-[1600px] mx-auto w-full flex-1 flex flex-col">
-        <section id="auth-section" class="max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] border-t-4 border-cyber animate-slide-up">
-            <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase text-cyber italic">Security Terminal</h2>
-            <div class="space-y-4">
-                <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white text-center font-bold outline-none focus:ring-2 focus:ring-cyber">
-                <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white text-center font-bold outline-none focus:ring-2 focus:ring-cyber">
-                <button onclick="handleAuth()" class="w-full bg-cyber text-black p-4 rounded-xl font-black uppercase text-xs">Authorize Access</button>
-                <button onclick="toggleAuth()" id="toggle-text" class="w-full text-[10px] text-slate-500 hover:text-cyber font-bold uppercase mt-2">Initialize New Node</button>
-            </div>
-        </section>
+<input id="username" placeholder="username">
+<input id="password" type="password">
+<button onclick="handleAuth()">Login/Register</button>
 
-        <section id="setup-section" class="hidden max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] border-t-4 border-green-500 animate-slide-up text-center">
-            <h2 class="text-2xl font-black text-green-500 mb-4 uppercase italic">Identity Setup</h2>
-            <input type="text" id="new-handle-input" placeholder="@nickname" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 mb-4 text-center font-bold outline-none focus:ring-2 focus:ring-green-500 text-white">
-            <button onclick="saveHandle()" class="w-full bg-green-500 text-white p-4 rounded-xl font-black uppercase text-xs">Confirm Identity</button>
-        </section>
+<div id="setup-section" style="display:none;">
+    <input id="new-handle-input" placeholder="handle">
+    <button onclick="saveHandle()">Confirm</button>
+</div>
 
-        <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] overflow-hidden animate-slide-up">
-            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col relative">
-                <p class="text-[9px] font-black text-cyber uppercase mb-4 border-b border-white/5 pb-2">Inbox</p>
-                <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
-                <button onclick="logout()" class="mt-4 w-full bg-red-500/20 text-red-500 p-2 rounded-xl text-[10px] font-black uppercase">Logout</button>
-            </aside>
+<input id="searchInput" oninput="loadUsers()">
+<div id="user-list"></div>
 
-            <main class="lg:col-span-6 glass rounded-[2rem] flex flex-col overflow-hidden relative">
-                <div class="p-4 border-b border-white/10 bg-white/5">
-                    <h3 id="t-name" class="font-bold text-sm uppercase italic text-white">Select Node</h3>
-                </div>
-                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs text-white"></div>
-                <div class="p-4 bg-black/20 flex gap-3">
-                    <input type="text" id="m-input" placeholder="Type secure message..." class="flex-1 bg-transparent outline-none text-white px-2">
-                    <button onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black">SEND</button>
-                </div>
-            </main>
+<input id="m-input">
+<button onclick="dispatchMsg()">Send</button>
 
-            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col">
-                <p class="text-[9px] font-black text-cyber uppercase mb-4 border-b border-white/5 pb-2">Discovery</p>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white outline-none">
-                <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
-            </aside>
-        </div>
-    </main>
+<div id="msgs-box"></div>
 
-    <script>
-        // Firebase Configuration - ضع بيانات Firebase الخاصة بك هنا
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
+<script>
+let isLogin = true, me = null, target = null, myPriv = null, myPubPem = null, lastLen = 0, usersRaw = [];
+const pki = forge.pki;
 
-        // Initialize Firebase
-        let db;
-        try {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore();
-            console.log("✅ Firebase connected");
-        } catch (error) {
-            console.error("Firebase error:", error);
-            alert("⚠️ Firebase configuration error! Please check your config.");
+/* ================= AUTH ================= */
+async function handleAuth() {
+    const u = document.getElementById('username').value.trim().toLowerCase();
+    const p = document.getElementById('password').value.trim();
+    if(!u || !p) return alert("Fill credentials");
+
+    const securePass = forge.md.sha256.create().update(p).digest().toHex();
+
+    let sPriv = localStorage.getItem(`cyber_v1_priv_${u}`);
+    let sPub  = localStorage.getItem(`cyber_v1_pub_${u}`);
+
+    if(!sPriv) {
+        const pair = pki.rsa.generateKeyPair(2048);
+        sPriv = pki.privateKeyToPem(pair.privateKey);
+        sPub  = pki.publicKeyToPem(pair.publicKey);
+
+        localStorage.setItem(`cyber_v1_priv_${u}`, sPriv);
+        localStorage.setItem(`cyber_v1_pub_${u}`, sPub);
+    }
+
+    myPriv = pki.privateKeyFromPem(sPriv);
+    myPubPem = sPub;
+
+    const res = await fetch('/auth', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            username: u,
+            password: securePass,
+            publicKey: btoa(sPub),
+            isLogin
+        })
+    });
+
+    const data = await res.json();
+
+    if(res.ok) {
+        me = data;
+        if(!me.username) me.username = u;
+
+        if(!me.handle) {
+            document.getElementById('setup-section').style.display = 'block';
+        } else {
+            enterApp();
         }
 
-        let isLogin = true, me = null, target = null, myPriv = null, myPubPem = null, lastLen = 0, usersRaw = [];
-        const pki = forge.pki;
+    } else {
+        alert(data.error || "Auth failed");
+    }
+}
 
-        function toggleAuth() { 
-            isLogin = !isLogin; 
-            document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Registration'; 
-            document.getElementById('toggle-text').innerText = isLogin ? 'Initialize New Node' : 'Back to Login'; 
-        }
+/* ================= HANDLE ================= */
+async function saveHandle() {
+    const h = document.getElementById('new-handle-input').value.trim();
+    if(!h) return alert("Enter handle");
 
-        function logout() {
-            if(confirm("Logout from terminal?")) {
-                me = null;
-                target = null;
-                document.getElementById('chat-section').classList.add('hidden');
-                document.getElementById('user-badge-nav').classList.add('hidden');
-                document.getElementById('auth-section').classList.remove('hidden');
-                document.getElementById('username').value = '';
-                document.getElementById('password').value = '';
-                if(syncInterval) clearInterval(syncInterval);
-            }
-        }
+    const curU = me.username;
 
-        // Helper functions for Firebase
-        async function saveUserToFirebase(user) {
-            if(db) await db.collection('users').doc(user.username).set(user);
-        }
+    try {
+        const res = await fetch('/set-handle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ username: curU, handle: h })
+        });
 
-        async function getUserFromFirebase(username) {
-            if(db) {
-                const doc = await db.collection('users').doc(username).get();
-                return doc.exists ? doc.data() : null;
-            }
-            return null;
-        }
+        const data = await res.json();
 
-        async function getAllUsersFromFirebase() {
-            if(db) {
-                const snapshot = await db.collection('users').get();
-                return snapshot.docs.map(doc => doc.data());
-            }
-            return [];
-        }
-
-        async function saveMessageToFirebase(message) {
-            if(db) await db.collection('messages').add(message);
-        }
-
-        async function getMessagesFromFirebase(user1, user2) {
-            if(db) {
-                const snapshot = await db.collection('messages')
-                    .where('sender', 'in', [user1, user2])
-                    .where('receiver', 'in', [user1, user2])
-                    .orderBy('timestamp', 'asc')
-                    .get();
-                return snapshot.docs.map(doc => doc.data());
-            }
-            return [];
-        }
-
-        async function getIncomingMessagesFromFirebase(username) {
-            if(db) {
-                const snapshot = await db.collection('messages')
-                    .where('receiver', '==', username)
-                    .orderBy('timestamp', 'desc')
-                    .get();
-                return snapshot.docs.map(doc => doc.data());
-            }
-            return [];
-        }
-
-        async function handleAuth() {
-            const u = document.getElementById('username').value.trim().toLowerCase();
-            const p = document.getElementById('password').value.trim();
-            if(!u || !p) return alert("Fill credentials");
-            
-            const securePass = forge.md.sha256.create().update(p).digest().toHex();
-            let sPriv = localStorage.getItem(`cyber_v2_priv_${u}`), sPub = localStorage.getItem(`cyber_v2_pub_${u}`);
-            
-            if(!sPriv) {
-                // Generate RSA 2048 - FIXED: 2048 instead of 1024
-                const pair = pki.rsa.generateKeyPair(2048);
-                sPriv = pki.privateKeyToPem(pair.privateKey); 
-                sPub = pki.publicKeyToPem(pair.publicKey);
-                localStorage.setItem(`cyber_v2_priv_${u}`, sPriv); 
-                localStorage.setItem(`cyber_v2_pub_${u}`, sPub);
-            }
-            myPriv = pki.privateKeyFromPem(sPriv); 
-            myPubPem = sPub;
-
-            if(isLogin) {
-                // Login
-                const user = await getUserFromFirebase(u);
-                if(!user || user.password !== securePass) {
-                    alert("Invalid credentials");
-                    return;
-                }
-                if(user.publicKey !== sPub) {
-                    alert("Key mismatch! Clear browser data and re-register.");
-                    return;
-                }
-                me = { username: u, handle: user.handle, publicKey: user.publicKey };
-                completeAuth();
-            } else {
-                // Register
-                const existing = await getUserFromFirebase(u);
-                if(existing) {
-                    alert("Username already exists");
-                    return;
-                }
-                const newUser = {
-                    username: u,
-                    password: securePass,
-                    handle: null,
-                    publicKey: sPub,
-                    createdAt: Date.now()
-                };
-                await saveUserToFirebase(newUser);
-                me = { username: u, handle: null, publicKey: sPub };
-                document.getElementById('auth-section').classList.add('hidden');
-                document.getElementById('setup-section').classList.remove('hidden');
-            }
-        }
-
-        function completeAuth() {
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('setup-section').classList.add('hidden');
-            document.getElementById('chat-section').classList.remove('hidden');
-            document.getElementById('user-badge-nav').classList.remove('hidden');
-            const displayName = me.handle ? `@${me.handle}` : me.username;
-            document.getElementById('active-user').innerText = displayName;
-            fetchUsers();
-            if(window.syncInterval) clearInterval(window.syncInterval);
-            window.syncInterval = setInterval(() => sync(), 2000);
-            sync();
-        }
-
-        async function saveHandle() {
-            const h = document.getElementById('new-handle-input').value.trim();
-            if(!h) {
-                alert("Handle cannot be empty!");
-                return;
-            }
-            if(!/^[a-zA-Z0-9_]{3,16}$/.test(h)) {
-                alert("Handle must be 3-16 characters (letters, numbers, underscore)");
-                return;
-            }
-            
-            const users = await getAllUsersFromFirebase();
-            const existing = users.find(u => u.handle === h && u.username !== me.username);
-            if(existing) {
-                alert("Handle already taken!");
-                return;
-            }
-            
+        if(res.ok) {
             me.handle = h;
-            const userData = await getUserFromFirebase(me.username);
-            if(userData) {
-                userData.handle = h;
-                await saveUserToFirebase(userData);
-            }
-            
-            document.getElementById('setup-section').classList.add('hidden');
-            document.getElementById('chat-section').classList.remove('hidden');
-            document.getElementById('user-badge-nav').classList.remove('hidden');
-            document.getElementById('active-user').innerText = `@${h}`;
-            fetchUsers();
-            sync();
+            enterApp();
+        } else {
+            alert(data.error);
         }
 
-        async function fetchUsers() { 
-            const users = await getAllUsersFromFirebase();
-            usersRaw = users.filter(u => u.username !== me.username);
-            loadUsers();
-        }
-        
-        function loadUsers() {
-            const q = document.getElementById('searchInput').value.toLowerCase().trim();
-            const filtered = usersRaw.filter(u => (u.handle || u.username).toLowerCase().includes(q));
-            document.getElementById('user-list').innerHTML = filtered.map(u => `
-                <div onclick='setTarget(${JSON.stringify(u)})' class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
-                    <span class="text-[10px] font-black uppercase text-white truncate w-32">@${u.handle || u.username}</span>
-                    <span class="text-[8px] text-cyber">🔒</span>
-                </div>
-            `).join('');
-        }
+    } catch {
+        alert("Server error");
+    }
+}
 
-        function setTarget(u) { 
-            target = u; 
-            lastLen = 0; 
-            document.getElementById('t-name').innerText = (u.handle || u.username).toUpperCase(); 
-            document.getElementById('msgs-box').innerHTML = ''; 
-            loadConversation();
-        }
+/* ================= ENTER ================= */
+function enterApp() {
+    document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
+    setInterval(sync, 2000);
+    fetchUsers();
+}
 
-        async function loadConversation() {
-            if(!target) return;
-            const messages = await getMessagesFromFirebase(me.username, target.username);
-            if(messages.length === lastLen && lastLen !== 0) return;
-            lastLen = messages.length;
-            renderMessages(messages);
-        }
+/* ================= USERS ================= */
+async function fetchUsers() {
+    const res = await fetch('/users');
+    usersRaw = await res.json();
+}
 
-        function renderMessages(messages) {
-            const container = document.getElementById('msgs-box');
-            if(!container) return;
-            container.innerHTML = messages.map(m => {
-                const isMe = m.sender === me.username;
-                let decrypted = "🔒 Locked";
-                try {
-                    const encryptedPayload = isMe ? m.senderCopy : m.message;
-                    if(encryptedPayload) {
-                        const decryptedBytes = myPriv.decrypt(forge.util.decode64(encryptedPayload), 'RSA-OAEP');
-                        decrypted = forge.util.decodeUtf8(decryptedBytes);
-                    }
-                } catch(e) { decrypted = "🔒 Decrypt Failed"; }
-                const senderName = isMe ? "YOU" : (m.senderHandle || m.sender);
-                return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up">
-                            <div class="${isMe ? 'bg-cyber text-black font-bold' : 'glass text-white'} p-3 rounded-2xl max-w-[85%] mb-2 shadow-lg">
-                                <p class="text-[7px] opacity-50 mb-1 uppercase">${escapeHtml(senderName)}</p>
-                                <p class="text-xs break-words">${escapeHtml(decrypted)}</p>
-                            </div>
-                        </div>`;
-            }).join('');
-            container.scrollTop = container.scrollHeight;
-        }
+function loadUsers() {
+    const q = document.getElementById('searchInput').value.toLowerCase().trim();
 
-        async function dispatchMsg() {
-            const input = document.getElementById('m-input'), txt = input.value.trim();
-            if(!txt || !target) return;
-            if(txt.length > 180) {
-                alert("Message too long! Maximum 180 characters for RSA-2048.");
-                return;
-            }
+    const filtered = usersRaw.filter(u =>
+        u.username.toLowerCase().includes(q) &&
+        u.username !== me.username
+    );
+
+    document.getElementById('user-list').innerHTML =
+        filtered.map(u => `
+            <div onclick='setTarget(${JSON.stringify(u)})'>
+                @${u.handle || u.username}
+            </div>
+        `).join('');
+}
+
+function setTarget(u) {
+    target = u;
+    lastLen = 0;
+    document.getElementById('msgs-box').innerHTML = '';
+}
+
+/* ================= SEND ================= */
+async function dispatchMsg() {
+    const input = document.getElementById('m-input');
+    const txt = input.value.trim();
+
+    if(!txt || !target) return;
+
+    if(!target.publicKey) {
+        alert("Target has no public key");
+        return;
+    }
+
+    try {
+        const myClean = me.username.toLowerCase();
+        const targetClean = target.username.toLowerCase();
+
+        const tPub = pki.publicKeyFromPem(atob(target.publicKey));
+
+        const mRec = forge.util.encode64(
+            tPub.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP')
+        );
+
+        const mMe = forge.util.encode64(
+            pki.publicKeyFromPem(myPubPem)
+            .encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP')
+        );
+
+        await fetch('/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                sender: myClean,
+                receiver: targetClean,
+                message: mRec,
+                senderCopy: mMe
+            })
+        });
+
+        input.value = '';
+        lastLen = 0;
+        sync();
+
+    } catch (e) {
+        console.error(e);
+        alert("Encryption Fault");
+    }
+}
+
+/* ================= SYNC ================= */
+async function sync() {
+    if(!me || !target) return;
+
+    const myClean = me.username.toLowerCase();
+
+    const res = await fetch(`/messages-full/${myClean}/${target.username}`);
+    const msgs = await res.json();
+
+    if(msgs.length === lastLen) return;
+    lastLen = msgs.length;
+
+    document.getElementById('msgs-box').innerHTML =
+        msgs.map(m => {
+            const isMe = m.sender === myClean;
+
+            let d = "";
             try {
-                const targetPublicKey = pki.publicKeyFromPem(target.publicKey);
-                const encryptedForReceiver = targetPublicKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP');
-                const encryptedForReceiverB64 = forge.util.encode64(encryptedForReceiver);
-                
-                const myPublicKey = pki.publicKeyFromPem(myPubPem);
-                const encryptedForSelf = myPublicKey.encrypt(forge.util.encodeUtf8(txt), 'RSA-OAEP');
-                const encryptedForSelfB64 = forge.util.encode64(encryptedForSelf);
-                
-                const newMsg = {
-                    sender: me.username,
-                    senderHandle: me.handle || me.username,
-                    receiver: target.username,
-                    message: encryptedForReceiverB64,
-                    senderCopy: encryptedForSelfB64,
-                    timestamp: Date.now()
-                };
-                await saveMessageToFirebase(newMsg);
-                input.value = '';
-                lastLen = 0;
-                await loadConversation();
-                await syncInbox();
-            } catch (e) { 
-                console.error(e);
-                alert("Encryption Fault: " + e.message); 
+                d = forge.util.decodeUtf8(
+                    myPriv.decrypt(
+                        forge.util.decode64(isMe ? m.senderCopy : m.message),
+                        'RSA-OAEP'
+                    )
+                );
+            } catch {
+                d = "🔒";
             }
-        }
 
-        async function syncInbox() {
-            if(!me) return;
-            const incoming = await getIncomingMessagesFromFirebase(me.username);
-            const unique = new Map();
-            for(const msg of incoming) {
-                const sender = msg.sender;
-                if(!unique.has(sender)) {
-                    let preview = "🔒 New message";
-                    try {
-                        const decrypted = myPriv.decrypt(forge.util.decode64(msg.message), 'RSA-OAEP');
-                        preview = forge.util.decodeUtf8(decrypted).slice(0, 40);
-                    } catch(e) { preview = "🔒 Encrypted"; }
-                    unique.set(sender, {
-                        sender: sender,
-                        senderHandle: msg.senderHandle || sender,
-                        preview: preview,
-                        timestamp: msg.timestamp
-                    });
-                }
-            }
-            const inboxArray = Array.from(unique.values()).sort((a,b) => b.timestamp - a.timestamp);
-            const inboxContainer = document.getElementById('inbox-list');
-            if(inboxArray.length === 0) {
-                inboxContainer.innerHTML = `<div class="text-center text-slate-500 text-[10px] p-4">📭 No messages</div>`;
-                return;
-            }
-            inboxContainer.innerHTML = inboxArray.map(item => `
-                <div onclick='openFromInbox("${item.sender}")' class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5">
-                    <p class="text-[9px] font-black uppercase text-cyber">@${escapeHtml(item.senderHandle)}</p>
-                    <p class="text-[8px] opacity-60 truncate text-white">${escapeHtml(item.preview)}</p>
-                </div>
-            `).join('');
-        }
+            return `<div>${m.sender}: ${d}</div>`;
+        }).join('');
+}
+</script>
 
-        async function openFromInbox(senderUsername) {
-            const user = usersRaw.find(x => x.username === senderUsername);
-            if(user) setTarget(user);
-            else {
-                await fetchUsers();
-                const found = usersRaw.find(x => x.username === senderUsername);
-                if(found) setTarget(found);
-            }
-        }
-
-        async function sync() {
-            if(!me) return;
-            await fetchUsers();
-            if(target) await loadConversation();
-            await syncInbox();
-        }
-
-        function escapeHtml(str) {
-            if(!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if(m === '&') return '&amp;';
-                if(m === '<') return '&lt;';
-                if(m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        // Make sure search works from start
-        window.loadUsers = loadUsers;
-        window.setTarget = setTarget;
-        window.openFromInbox = openFromInbox;
-        window.handleAuth = handleAuth;
-        window.toggleAuth = toggleAuth;
-        window.saveHandle = saveHandle;
-        window.dispatchMsg = dispatchMsg;
-        window.logout = logout;
-    </script>
 </body>
 </html>
