@@ -1,64 +1,19 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-
-<script>
-tailwind.config = {
-    darkMode: 'class',
-    theme: { extend: { colors: { cyber: '#06b6d4' } } }
-}
-</script>
-
-<style>
-body { font-family: 'Inter', sans-serif; user-select: none !important; }
-.glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
-.chat-area::-webkit-scrollbar { width: 4px; }
-.chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
-.animate-slide-up { animation: slideUp 0.3s ease-out; }
-@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-</style>
-</head>
-
-<body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen p-4 flex flex-col">
-
-<nav class="glass px-6 py-4 rounded-2xl mb-6 flex justify-between">
-    <h1 class="text-cyber font-black">Cyber Messenger</h1>
-    <span id="active-user"></span>
-</nav>
-
-<input id="username" placeholder="username">
-<input id="password" type="password">
-<button onclick="handleAuth()">Login/Register</button>
-
-<div id="setup-section" style="display:none;">
-    <input id="new-handle-input" placeholder="handle">
-    <button onclick="saveHandle()">Confirm</button>
-</div>
-
-<input id="searchInput" oninput="loadUsers()">
-<div id="user-list"></div>
-
-<input id="m-input">
-<button onclick="dispatchMsg()">Send</button>
-
-<div id="msgs-box"></div>
-
 <script>
 let isLogin = true, me = null, target = null, myPriv = null, myPubPem = null, lastLen = 0, usersRaw = [];
 const pki = forge.pki;
+
+/* ================= TOGGLE ================= */
+function toggleAuth() {
+    isLogin = !isLogin;
+    document.getElementById('auth-title').innerText = isLogin ? 'Security Terminal' : 'Registration';
+    document.getElementById('toggle-text').innerText = isLogin ? 'Initialize New Node' : 'Back to Login';
+}
 
 /* ================= AUTH ================= */
 async function handleAuth() {
     const u = document.getElementById('username').value.trim().toLowerCase();
     const p = document.getElementById('password').value.trim();
+
     if(!u || !p) return alert("Fill credentials");
 
     const securePass = forge.md.sha256.create().update(p).digest().toHex();
@@ -67,7 +22,7 @@ async function handleAuth() {
     let sPub  = localStorage.getItem(`cyber_v1_pub_${u}`);
 
     if(!sPriv) {
-        const pair = pki.rsa.generateKeyPair(2048);
+        const pair = pki.rsa.generateKeyPair(2048); // 🔥 مهم
         sPriv = pki.privateKeyToPem(pair.privateKey);
         sPub  = pki.publicKeyToPem(pair.publicKey);
 
@@ -93,12 +48,15 @@ async function handleAuth() {
 
     if(res.ok) {
         me = data;
-        if(!me.username) me.username = u;
+
+        if(!me.username) me.username = u; // 🔥 fix مهم
+
+        document.getElementById('auth-section').classList.add('hidden');
 
         if(!me.handle) {
-            document.getElementById('setup-section').style.display = 'block';
+            document.getElementById('setup-section').classList.remove('hidden');
         } else {
-            enterApp();
+            enterTerminal();
         }
 
     } else {
@@ -109,6 +67,7 @@ async function handleAuth() {
 /* ================= HANDLE ================= */
 async function saveHandle() {
     const h = document.getElementById('new-handle-input').value.trim();
+
     if(!h) return alert("Enter handle");
 
     const curU = me.username;
@@ -117,16 +76,19 @@ async function saveHandle() {
         const res = await fetch('/set-handle', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ username: curU, handle: h })
+            body: JSON.stringify({
+                username: curU,
+                handle: h
+            })
         });
 
         const data = await res.json();
 
         if(res.ok) {
             me.handle = h;
-            enterApp();
+            enterTerminal();
         } else {
-            alert(data.error);
+            alert(data.error || "Failed");
         }
 
     } catch {
@@ -135,8 +97,14 @@ async function saveHandle() {
 }
 
 /* ================= ENTER ================= */
-function enterApp() {
+function enterTerminal() {
+    document.getElementById('auth-section').classList.add('hidden');
+    document.getElementById('setup-section').classList.add('hidden');
+    document.getElementById('chat-section').classList.remove('hidden');
+    document.getElementById('user-badge-nav').classList.remove('hidden');
+
     document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
+
     setInterval(sync, 2000);
     fetchUsers();
 }
@@ -157,15 +125,19 @@ function loadUsers() {
 
     document.getElementById('user-list').innerHTML =
         filtered.map(u => `
-            <div onclick='setTarget(${JSON.stringify(u)})'>
+        <div onclick='setTarget(${JSON.stringify(u)})'
+        class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
+            <span class="text-[10px] font-black uppercase text-white truncate w-32">
                 @${u.handle || u.username}
-            </div>
+            </span>
+        </div>
         `).join('');
 }
 
 function setTarget(u) {
     target = u;
     lastLen = 0;
+    document.getElementById('t-name').innerText = (u.handle || u.username).toUpperCase();
     document.getElementById('msgs-box').innerHTML = '';
 }
 
@@ -177,7 +149,7 @@ async function dispatchMsg() {
     if(!txt || !target) return;
 
     if(!target.publicKey) {
-        alert("Target has no public key");
+        alert("User not ready yet");
         return;
     }
 
@@ -219,9 +191,42 @@ async function dispatchMsg() {
 
 /* ================= SYNC ================= */
 async function sync() {
-    if(!me || !target) return;
+    if(!me) return;
 
     const myClean = me.username.toLowerCase();
+
+    // inbox
+    const inRes = await fetch(`/messages/${myClean}`);
+    const inData = await inRes.json();
+
+    const unique = {};
+
+    inData.forEach(p => {
+        const s = p.sender.toLowerCase();
+
+        if(!unique[s]) {
+            try {
+                const part = (s === myClean) ? p.senderCopy : p.message;
+
+                unique[s] = forge.util.decodeUtf8(
+                    myPriv.decrypt(forge.util.decode64(part), 'RSA-OAEP')
+                );
+            } catch {
+                unique[s] = "🔒";
+            }
+        }
+    });
+
+    document.getElementById('inbox-list').innerHTML =
+        Object.keys(unique).map(s => `
+        <div onclick='openFromInbox("${s}")'
+        class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5">
+            <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
+            <p class="text-[8px] opacity-60 truncate text-white">${unique[s]}</p>
+        </div>
+        `).join('');
+
+    if(!target) return;
 
     const res = await fetch(`/messages-full/${myClean}/${target.username}`);
     const msgs = await res.json();
@@ -242,13 +247,22 @@ async function sync() {
                     )
                 );
             } catch {
-                d = "🔒";
+                d = "🔒 Locked";
             }
 
-            return `<div>${m.sender}: ${d}</div>`;
+            return `
+            <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up">
+                <div class="${isMe ? 'bg-cyber text-black font-bold' : 'glass text-white'} p-3 rounded-2xl max-w-[85%] mb-2 shadow-lg">
+                    <p class="text-[7px] opacity-50 mb-1 uppercase">${m.sender}</p>
+                    <p class="text-xs break-words">${d}</p>
+                </div>
+            </div>`;
         }).join('');
 }
-</script>
 
-</body>
-</html>
+/* ================= OPEN ================= */
+function openFromInbox(s) {
+    const u = usersRaw.find(x => x.username.toLowerCase() === s);
+    if(u) setTarget(u);
+}
+</script>
