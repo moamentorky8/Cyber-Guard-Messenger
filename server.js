@@ -1,189 +1,163 @@
 const express = require('express');
+const crypto = require('crypto');
 const path = require('path');
 const admin = require("firebase-admin");
 
 const app = express();
-
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-let db;
+// --- 1. إعدادات الربط بـ Firebase (النسخة الصخرية النهائية) ---
+if (!admin.apps.length) {
+    try {
+        let serviceAccount;
 
-/* ================= FIREBASE INIT ================= */
-try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-        : require("./serviceAccountKey.json"); // محلي فقط
+        if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+            // معالجة ذكية للـ JSON من Environment Variables
+            // بنشيل أي مسافات وبنصلح السطور الجديدة في الـ Private Key
+            const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+            serviceAccount = JSON.parse(rawJson);
+            
+            // تصحيح ضروري جداً لمفتاح جوجل السري في بيئة السحاب
+            if (serviceAccount.private_key) {
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+            }
+            console.log("☁️ Connected via Vercel Secrets");
+        } else {
+            // الربط المحلي (بكرة في الكلية)
+            serviceAccount = require("./serviceAccountKey.json");
+            console.log("✅ Connected via Local JSON File");
+        }
 
-    if (!admin.apps.length) {
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
         });
+    } catch (e) {
+        console.error("❌ Firebase Initialization Failed:", e.message);
+        // منع السيرفر من الانهيار
+        if (!admin.apps.length) {
+            admin.initializeApp({
+                credential: admin.credential.applicationDefault(),
+                databaseURL: "https://cyber-massage-default-rtdb.europe-west1.firebasedatabase.app"
+            });
+        }
     }
-
-    db = admin.database();
-
-} catch (e) {
-    console.error("🔥 Firebase Init Error:", e);
 }
 
-/* ================= SEND MESSAGE ================= */
-app.post('/send', async (req, res) => {
+const db = admin.database();
+
+// دالة تشفير الباسورد SHA-256
+function hashPassword(p) { 
+    return crypto.createHash('sha256').update(p).digest('hex'); 
+}
+
+// --- 2. المسارات (API Routes) ---
+
+// تسجيل مستخدم جديد (Register)
+app.post('/register', async (req, res) => {
     try {
-        const { sender, receiver, message, senderCopy } = req.body;
+        const { username, password, publicKey } = req.body;
+        if (!username || !password) return res.status(400).json({ error: "بيانات ناقصة" });
 
-        if (!sender || !receiver || !message || !senderCopy) {
-            return res.status(400).json({ error: "Invalid data" });
-        }
+        const cleanUser = username.toLowerCase().trim();
+        const userRef = db.ref("users/" + cleanUser);
 
-        const msgRef = db.ref("messages").push();
+        const snapshot = await userRef.once("value");
+        if (snapshot.exists()) return res.status(400).json({ error: "الاسم مسجل بالفعل" });
 
-        await msgRef.set({
-            sender: sender.toLowerCase().trim(),
-            receiver: receiver.toLowerCase().trim(),
-            message,
-            senderCopy,
-            id: msgRef.key,
-            timestamp: Date.now(),
-            edited: false
+        await userRef.set({
+            username: cleanUser,
+            password: hashPassword(password),
+            publicKey: publicKey || "",
+            lastSeen: Date.now()
         });
 
-        res.json({ success: true });
-
+        res.status(201).json({ message: "Success", username: cleanUser });
     } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Fail" });
+        console.error("Register Error:", e);
+        res.status(500).json({ error: "خطأ في السيرفر: " + e.message });
     }
 });
 
-/* ================= GET CHAT ================= */
-app.get('/messages-full/:u1/:u2', async (req, res) => {
+// تسجيل الدخول (Login)
+app.post('/login', async (req, res) => {
     try {
-        const u1 = req.params.u1.toLowerCase();
-        const u2 = req.params.u2.toLowerCase();
+        const { username, password } = req.body;
+        const cleanUser = username.toLowerCase().trim();
+        const userRef = db.ref("users/" + cleanUser);
 
-        const snap = await db.ref("messages").limitToLast(100).once("value");
-        const all = Object.values(snap.val() || {});
+        const snapshot = await userRef.once("value");
+        const user = snapshot.val();
 
-        const filtered = all.filter(m =>
-            (m.sender === u1 && m.receiver === u2) ||
-            (m.sender === u2 && m.receiver === u1)
-        ).sort((a, b) => a.timestamp - b.timestamp);
-
-        res.json(filtered);
-
-    } catch (e) {
-        console.error(e);
-        res.json([]);
-    }
-});
-
-/* ================= AUTH ================= */
-app.post('/auth', async (req, res) => {
-    try {
-        const { username, password, publicKey, isLogin } = req.body;
-
-        if (!username || !password || !publicKey) {
-            return res.status(400).json({ error: "Missing data" });
+        if (!user || user.password !== hashPassword(password)) {
+            return res.status(401).json({ error: "اليوزر أو الباسورد غلط" });
         }
 
-        const u = username.toLowerCase().trim();
-        const ref = db.ref(`users/${u}`);
-        const snap = await ref.once("value");
-
-        if (isLogin) {
-            const user = snap.val();
-
-            if (!user || user.password !== password) {
-                return res.status(401).json({ error: "Denied" });
-            }
-
-            await ref.update({
-                publicKey,
-                lastSeen: Date.now()
-            });
-
-            return res.json({
-                username: u,
-                handle: user.handle || "",
-                publicKey
-            });
-
-        } else {
-            if (snap.exists()) {
-                return res.status(400).json({ error: "Username already taken" });
-            }
-
-            await ref.set({
-                username: u,
-                password,
-                publicKey,
-                handle: "",
-                lastSeen: Date.now()
-            });
-
-            return res.status(201).json({
-                username: u,
-                handle: "",
-                publicKey
-            });
-        }
-
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Fault" });
+        await userRef.update({ lastSeen: Date.now() });
+        res.json({ username: user.username, publicKey: user.publicKey });
+    } catch (e) {
+        res.status(500).json({ error: "فشل الدخول" });
     }
 });
 
-/* ================= GET USERS ================= */
+// قائمة المستخدمين
 app.get('/users', async (req, res) => {
     try {
-        const snap = await db.ref("users").once("value");
-
-        const users = Object.values(snap.val() || {})
-            .filter(u => u.publicKey) // 🔥 مهم للتشفير
-            .map(u => ({
-                username: u.username,
-                handle: u.handle || u.username,
-                publicKey: u.publicKey
-            }));
-
-        res.json(users);
-
-    } catch (e) {
-        console.error(e);
-        res.json([]);
-    }
+        const usersRef = db.ref("users");
+        const snapshot = await usersRef.once("value");
+        const usersData = snapshot.val() || {};
+        
+        const usersList = Object.values(usersData).map(u => ({
+            username: u.username,
+            publicKey: u.publicKey,
+            status: (Date.now() - u.lastSeen < 60000) ? "online" : "offline"
+        }));
+        
+        res.json(usersList);
+    } catch (e) { res.json([]); }
 });
 
-/* ================= SET HANDLE ================= */
-app.post('/set-handle', async (req, res) => {
+// إرسال رسالة مشفرة
+app.post('/send', async (req, res) => {
     try {
-        const { username, handle } = req.body;
-
-        if (!username || !handle) {
-            return res.status(400).json({ error: "Missing data" });
-        }
-
-        const u = username.toLowerCase().trim();
-
-        await db.ref(`users/${u}`).update({
-            handle: handle.trim()
+        const { sender, receiver, message } = req.body;
+        const msgRef = db.ref("messages").push(); 
+        await msgRef.set({
+            sender,
+            receiver: receiver.toLowerCase().trim(),
+            message,
+            timestamp: Date.now()
         });
-
         res.json({ success: true });
-
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Fail" });
-    }
+    } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
 });
 
-/* ================= FALLBACK ================= */
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// استقبال الرسائل وحذفها بعد القراءة (لأغراض الخصوصية)
+app.get('/messages/:username', async (req, res) => {
+    try {
+        const target = req.params.username.toLowerCase().trim();
+        const msgRef = db.ref("messages");
+        
+        const snapshot = await msgRef.orderByChild("receiver").equalTo(target).once("value");
+        const msgsData = snapshot.val() || {};
+        
+        const msgsList = Object.values(msgsData);
+        
+        if (msgsList.length > 0) {
+            const updates = {};
+            Object.keys(msgsData).forEach(key => { updates[key] = null; });
+            await msgRef.update(updates);
+        }
+        
+        res.json(msgsList);
+    } catch (e) { res.json([]); }
 });
 
-/* ================= EXPORT ================= */
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
 module.exports = app;
+
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(3000, () => console.log(`🚀 Server Running on http://localhost:3000`));
+}
