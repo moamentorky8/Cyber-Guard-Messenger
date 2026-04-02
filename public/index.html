@@ -51,6 +51,13 @@
             </div>
         </section>
 
+        <section id="setup-section" class="hidden max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] border-t-4 border-green-500 animate-slide-up text-center">
+            <h2 class="text-2xl font-black text-green-500 mb-4 uppercase italic">Identity Setup</h2>
+            <p class="text-[10px] opacity-60 mb-4 uppercase text-white">Set your @nickname for discovery</p>
+            <input type="text" id="new-handle-input" placeholder="@nickname" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none mb-4 text-center text-white focus:ring-2 focus:ring-green-500 font-bold">
+            <button onclick="saveHandle()" class="w-full bg-green-500 text-white p-4 rounded-xl font-black uppercase text-xs">Confirm Identity</button>
+        </section>
+
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
@@ -70,7 +77,7 @@
                         </div>
                     </div>
                 </div>
-                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs"></div>
+                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs text-white"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
                     <input type="text" id="m-input" placeholder="Type secure message..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
                     <button onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 transition-all">
@@ -88,11 +95,10 @@
     </main>
 
     <script>
-        // جعل تسجيل الدخول هو الحالة الافتراضية
-        let isLogin = true; 
-        let me = null, target = null, lastLen = 0, usersRaw = [];
+        let isLogin = true, me = null, target = null, lastLen = 0, usersRaw = [];
         const pki = forge.pki;
 
+        // RSA Logic - لم يتم التغيير
         const pair = pki.rsa.generateKeyPair(1024);
         const myPubPem = pki.publicKeyToPem(pair.publicKey);
         const myPriv = pair.privateKey;
@@ -105,7 +111,6 @@
 
         function toggleAuth() {
             isLogin = !isLogin;
-            // تغيير النصوص بناءً على طلبك
             document.getElementById('auth-title').innerText = isLogin ? 'Login' : 'Signup';
             document.getElementById('main-btn').innerText = isLogin ? 'Authorize Access' : 'Register & Start';
             document.getElementById('toggle-text').innerText = isLogin ? 'يوزر جديد؟ Signup' : 'لديك حساب؟ Login';
@@ -117,38 +122,57 @@
             if(!u || !p) return alert("Credentials Missing");
 
             const endpoint = isLogin ? '/login' : '/register';
-            const payload = { username: u, password: p };
-            if (!isLogin) payload.publicKey = myPubPem;
+            const payload = { username: u, password: p, publicKey: myPubPem };
 
             try {
                 const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
                 const data = await res.json();
                 if(res.ok) {
                     me = data;
-                    enterTerminal();
+                    if(!isLogin && !me.handle) {
+                        document.getElementById('auth-section').classList.add('hidden');
+                        document.getElementById('setup-section').classList.remove('hidden');
+                    } else { enterTerminal(); }
                 } else alert(data.error);
             } catch (e) { alert("Connection Denied."); }
         }
 
+        async function saveHandle() {
+            const h = document.getElementById('new-handle-input').value.trim();
+            if(!h) return alert("Nickname required");
+            const curU = me ? me.username : document.getElementById('username').value.trim().toLowerCase();
+            const res = await fetch('/set-handle', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({username: curU, handle: h})
+            });
+            if(res.ok) { 
+                if(me) me.handle = h; 
+                enterTerminal(); 
+            }
+        }
+
         function enterTerminal() {
             document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('setup-section').classList.add('hidden');
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge-nav').classList.remove('hidden');
-            document.getElementById('active-user').innerText = "@" + me.username;
-            loadUsers();
-            setInterval(syncSystem, 2000);
+            document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
+            setInterval(syncSystem, 1500); // مزامنة أسرع
         }
 
         async function loadUsers() {
-            const q = document.getElementById('searchInput').value.toLowerCase();
+            const q = document.getElementById('searchInput').value.toLowerCase().trim();
+            const container = document.getElementById('user-list');
+            if (q === "") { container.innerHTML = ""; return; }
             try {
                 const res = await fetch(`/users?search=${q}`);
                 usersRaw = await res.json();
-                document.getElementById('user-list').innerHTML = usersRaw.map(u => {
+                container.innerHTML = usersRaw.map(u => {
                     if(u.username === me.username) return '';
                     return `
                     <div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
-                        <span class="text-[10px] font-black uppercase text-white">@${u.username}</span>
+                        <span class="text-[10px] font-black uppercase text-white">@${u.handle || u.username}</span>
                         <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
                     </div>`;
                 }).join('');
@@ -176,13 +200,7 @@
                 });
                 if(res.ok) {
                     const box = document.getElementById('msgs-box');
-                    box.innerHTML += `
-                        <div class="flex justify-end animate-slide-up">
-                            <div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg">
-                                <p>${txt}</p>
-                                <p class="text-[7px] mt-1 opacity-50 uppercase tracking-tighter">Ciphertext Transmitted</p>
-                            </div>
-                        </div>`;
+                    box.innerHTML += `<div class="flex justify-end animate-slide-up"><div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg mb-2"><p>${txt}</p></div></div>`;
                     input.value = '';
                     box.scrollTop = box.scrollHeight;
                 }
@@ -194,16 +212,21 @@
             try {
                 const res = await fetch(`/messages/${me.username}`);
                 const msgs = await res.json();
+                
+                // تحديث الـ Inbox فوراً
                 const uniqueSenders = {};
-                msgs.forEach(m => { uniqueSenders[m.sender] = m; });
+                msgs.forEach(m => { if (!uniqueSenders[m.sender]) uniqueSenders[m.sender] = m; });
+                
                 const inboxArea = document.getElementById('inbox-list');
                 inboxArea.innerHTML = Object.keys(uniqueSenders).map(s => `
                     <div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
                         <div class="notification-dot"></div>
                         <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
-                        <p class="text-[8px] opacity-60 truncate text-white">Incoming Secured Packet...</p>
+                        <p class="text-[8px] opacity-60 truncate text-white italic">Secured Packet Received</p>
                     </div>
                 `).join('');
+
+                // تحديث الشات فوراً
                 if(target) {
                     const box = document.getElementById('msgs-box');
                     const currentMsgs = msgs.filter(m => m.sender === target.username);
@@ -213,12 +236,12 @@
                                 const decrypted = myPriv.decrypt(forge.util.decode64(m.message));
                                 box.innerHTML += `
                                     <div class="flex justify-start animate-slide-up">
-                                        <div class="glass p-3 rounded-2xl rounded-tl-none max-w-[80%] border border-white/10 text-white">
+                                        <div class="glass p-3 rounded-2xl rounded-tl-none max-w-[80%] border border-white/10 text-white mb-2">
                                             <p class="text-[7px] text-cyber font-black mb-1 uppercase">${m.sender}</p>
                                             <p>${decrypted}</p>
                                         </div>
                                     </div>`;
-                            } catch (e) { console.log("Incoming cipher data..."); }
+                            } catch (e) {}
                         });
                         lastLen = currentMsgs.length;
                         box.scrollTop = box.scrollHeight;
@@ -228,8 +251,10 @@
         }
 
         function openFromInbox(senderName) {
-            const user = usersRaw.find(u => u.username === senderName);
-            if(user) setTarget(user.username, user.publicKey);
+            fetch(`/users?search=${senderName}`).then(r => r.json()).then(data => {
+                const u = data.find(x => x.username === senderName);
+                if(u) setTarget(u.username, u.publicKey);
+            });
         }
     </script>
 </body>
