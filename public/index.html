@@ -59,7 +59,7 @@
         </section>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
-            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative">
+            <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative border-r border-white/5">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
                 <div class="absolute bottom-4 left-4 right-4">
@@ -98,7 +98,6 @@
         let isLogin = true, me = null, target = null, lastLen = 0, usersRaw = [];
         const pki = forge.pki;
 
-        // RSA Logic - لم يتم التغيير
         const pair = pki.rsa.generateKeyPair(1024);
         const myPubPem = pki.publicKeyToPem(pair.publicKey);
         const myPriv = pair.privateKey;
@@ -128,8 +127,8 @@
                 const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
                 const data = await res.json();
                 if(res.ok) {
-                    me = data;
-                    if(!isLogin && !me.handle) {
+                    me = data; 
+                    if(!isLogin && (!me.handle || me.handle === "")) {
                         document.getElementById('auth-section').classList.add('hidden');
                         document.getElementById('setup-section').classList.remove('hidden');
                     } else { enterTerminal(); }
@@ -140,14 +139,18 @@
         async function saveHandle() {
             const h = document.getElementById('new-handle-input').value.trim();
             if(!h) return alert("Nickname required");
-            const curU = me ? me.username : document.getElementById('username').value.trim().toLowerCase();
+            
+            // إصلاح: جلب اليوزر نيم من الإدخال لو الكائن me لسه متحدثش
+            const curUser = (me && me.username) ? me.username : document.getElementById('username').value.trim().toLowerCase();
+            
             const res = await fetch('/set-handle', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({username: curU, handle: h})
+                body: JSON.stringify({username: curUser, handle: h})
             });
             if(res.ok) { 
-                if(me) me.handle = h; 
+                if(!me) me = { username: curUser };
+                me.handle = h; 
                 enterTerminal(); 
             }
         }
@@ -158,7 +161,7 @@
             document.getElementById('chat-section').classList.remove('hidden');
             document.getElementById('user-badge-nav').classList.remove('hidden');
             document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-            setInterval(syncSystem, 1500); // مزامنة أسرع
+            setInterval(syncSystem, 2000);
         }
 
         async function loadUsers() {
@@ -170,8 +173,7 @@
                 usersRaw = await res.json();
                 container.innerHTML = usersRaw.map(u => {
                     if(u.username === me.username) return '';
-                    return `
-                    <div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
+                    return `<div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
                         <span class="text-[10px] font-black uppercase text-white">@${u.handle || u.username}</span>
                         <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
                     </div>`;
@@ -212,21 +214,16 @@
             try {
                 const res = await fetch(`/messages/${me.username}`);
                 const msgs = await res.json();
-                
-                // تحديث الـ Inbox فوراً
                 const uniqueSenders = {};
-                msgs.forEach(m => { if (!uniqueSenders[m.sender]) uniqueSenders[m.sender] = m; });
-                
+                msgs.forEach(m => { uniqueSenders[m.sender] = m; });
                 const inboxArea = document.getElementById('inbox-list');
                 inboxArea.innerHTML = Object.keys(uniqueSenders).map(s => `
                     <div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
                         <div class="notification-dot"></div>
                         <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
-                        <p class="text-[8px] opacity-60 truncate text-white italic">Secured Packet Received</p>
+                        <p class="text-[8px] opacity-60 truncate text-white italic italic">Packet Received</p>
                     </div>
                 `).join('');
-
-                // تحديث الشات فوراً
                 if(target) {
                     const box = document.getElementById('msgs-box');
                     const currentMsgs = msgs.filter(m => m.sender === target.username);
