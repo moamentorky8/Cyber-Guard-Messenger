@@ -18,6 +18,7 @@
         .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-all text-[12px] ml-2 cursor-pointer hover:text-cyber inline-block; }
         .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
     </style>
 </head>
@@ -55,14 +56,14 @@
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
                 <div class="absolute bottom-4 left-4 right-4">
-                    <button onclick="location.reload()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
+                    <button onclick="location.reload()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Logout</button>
                 </div>
             </aside>
 
             <main class="lg:col-span-6 glass rounded-[2rem] flex flex-col overflow-hidden relative border-x border-white/5">
                 <div id="chat-header" class="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
                     <div class="flex items-center gap-3">
-                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
+                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase">?</div>
                         <div>
                             <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
                             <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter text-cyber">E2EE_ACTIVE</p>
@@ -80,7 +81,7 @@
 
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Node Discovery</p>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent ID..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full uppercase">
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full uppercase">
                 <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
             </aside>
         </div>
@@ -90,7 +91,7 @@
         let isLogin = false, me = null, target = null, lastLen = 0, usersRaw = [];
         const pki = forge.pki;
 
-        // تشفير RSA (زي ما هو بالظبط)
+        // ثبات المفاتيح في الجلسة الواحدة
         const pair = pki.rsa.generateKeyPair(1024);
         const myPubPem = pki.publicKeyToPem(pair.publicKey);
         const myPriv = pair.privateKey;
@@ -112,10 +113,8 @@
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Credentials Missing");
             const endpoint = isLogin ? '/login' : '/register';
-            const payload = { username: u, password: p };
-            if (!isLogin) payload.publicKey = myPubPem;
             try {
-                const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+                const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p, publicKey: myPubPem})});
                 const data = await res.json();
                 if(res.ok) { me = data; enterTerminal(); } else alert(data.error);
             } catch (e) { alert("Connection Denied."); }
@@ -137,7 +136,7 @@
                 usersRaw = await res.json();
                 document.getElementById('user-list').innerHTML = usersRaw.map(u => {
                     if(u.username === me.username) return '';
-                    return `<div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all">
+                    return `<div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
                         <span class="text-[10px] font-black uppercase text-white">@${u.username}</span>
                         <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
                     </div>`;
@@ -150,22 +149,31 @@
             document.getElementById('t-name').innerText = name.toUpperCase();
             document.getElementById('target-avatar').innerText = name[0].toUpperCase();
             document.getElementById('msgs-box').innerHTML = '';
-            lastLen = 0; // ريست عشان الهيستوري يحمل
-            syncSystem(); 
+            lastLen = 0;
+            syncSystem();
         }
 
         async function dispatchMsg() {
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
-                const pubKeyObj = pki.publicKeyFromPem(target.publicKey);
-                const encrypted = forge.util.encode64(pubKeyObj.encrypt(txt));
-                const res = await fetch('/send', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ sender: me.username, receiver: target.username, message: encrypted }) });
-                if(res.ok) {
-                    const box = document.getElementById('msgs-box');
-                    box.innerHTML += `<div class="flex justify-end animate-slide-up"><div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg mb-2"><p>${txt}</p></div></div>`;
-                    input.value = ''; box.scrollTop = box.scrollHeight;
-                }
+                // تشفير للمستقبل
+                const tPub = pki.publicKeyFromPem(target.publicKey);
+                const mRec = forge.util.encode64(tPub.encrypt(txt));
+                // تشفير لنفسي (عشان تظهر في الهيستوري)
+                const mMe = forge.util.encode64(pki.publicKeyFromPem(myPubPem).encrypt(txt));
+
+                const res = await fetch('/send', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ 
+                        sender: me.username, 
+                        receiver: target.username, 
+                        message: mRec, 
+                        senderCopy: mMe // الحقل ده هو اللي بيحفظ الهيستوري عندك
+                    }) 
+                });
+                if(res.ok) { input.value = ''; syncSystem(); }
             } catch (e) { alert("Encryption Fault."); }
         }
 
@@ -175,44 +183,72 @@
                 const res = await fetch(`/messages/${me.username}`);
                 const msgs = await res.json();
                 
-                // تحديث الإنبوكس
-                const uniqueSenders = {};
-                msgs.forEach(m => { if (!uniqueSenders[m.sender]) uniqueSenders[m.sender] = m; });
+                // تحديث الإنبوكس (الجانب الأيسر)
+                const inboxData = {};
+                msgs.forEach(m => {
+                    const peer = m.sender === me.username ? m.receiver : m.sender;
+                    if(!inboxData[peer]) inboxData[peer] = m;
+                });
 
-                const inboxArea = document.getElementById('inbox-list');
-                inboxArea.innerHTML = Object.keys(uniqueSenders).map(s => {
-                    let preview = "🔒 Secured Packet";
-                    try { 
-                        const dec = myPriv.decrypt(forge.util.decode64(uniqueSenders[s].message));
-                        preview = dec.substring(0, 15) + (dec.length > 15 ? "..." : "");
+                document.getElementById('inbox-list').innerHTML = Object.keys(inboxData).map(s => {
+                    let preview = "🔒 Secured";
+                    try {
+                        const m = inboxData[s];
+                        const dec = myPriv.decrypt(forge.util.decode64(m.sender === me.username ? m.senderCopy : m.message));
+                        preview = dec.substring(0, 15);
                     } catch(e) {}
                     return `<div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/10 relative transition-all">
-                        <div class="notification-dot"></div>
-                        <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
-                        <p class="text-[10px] opacity-70 truncate text-white italic">${preview}</p>
+                        <div class="notification-dot"></div><p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
+                        <p class="text-[10px] opacity-70 truncate text-white italic">${preview}...</p>
                     </div>`;
                 }).join('');
 
                 // تحديث الشات (الهيستوري)
                 if(target) {
                     const box = document.getElementById('msgs-box');
-                    const currentMsgs = msgs.filter(m => m.sender === target.username);
-                    if(currentMsgs.length > lastLen) {
-                        currentMsgs.slice(lastLen).forEach(m => {
-                            try {
-                                const decrypted = myPriv.decrypt(forge.util.decode64(m.message));
-                                box.innerHTML += `<div class="flex justify-start animate-slide-up"><div class="glass p-3 rounded-2xl rounded-tl-none max-w-[85%] border border-white/10 text-white mb-2"><p class="text-[7px] text-cyber font-black mb-1 uppercase">${m.sender}</p><p>${decrypted}</p></div></div>`;
-                            } catch (e) {}
-                        });
-                        lastLen = currentMsgs.length;
+                    const chatMsgs = msgs.filter(m => (m.sender === target.username && m.receiver === me.username) || (m.sender === me.username && m.receiver === target.username));
+                    
+                    if(chatMsgs.length !== lastLen) {
+                        box.innerHTML = chatMsgs.map(m => {
+                            const isMe = m.sender === me.username;
+                            let d = "";
+                            try { d = myPriv.decrypt(forge.util.decode64(isMe ? m.senderCopy : m.message)); } catch(e) { d = "🔒 Decryption Fail"; }
+                            return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
+                                <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-3 rounded-2xl max-w-[85%] mb-2 shadow-lg relative">
+                                    <p class="text-[7px] opacity-50 mb-1 uppercase">${m.sender}</p>
+                                    <p class="text-xs">${d}</p>
+                                    ${isMe ? `<div class="mt-1 border-t border-black/10 pt-1 text-right">
+                                        <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
+                                        <span onclick="ui_del('${m.id}')" class="msg-btn text-red-600">✖</span>
+                                    </div>` : ''}
+                                </div></div>`;
+                        }).join('');
+                        lastLen = chatMsgs.length;
                         box.scrollTop = box.scrollHeight;
                     }
                 }
             } catch (e) {}
         }
 
-        function openFromInbox(senderName) {
-            const user = usersRaw.find(u => u.username === senderName);
+        async function ui_edit(id) {
+            const n = prompt("Edit payload:");
+            if(n) {
+                // لازم نشفر التعديل برضه عشان يفضل محمي
+                const tPub = pki.publicKeyFromPem(target.publicKey);
+                const mRec = forge.util.encode64(tPub.encrypt(n));
+                const mMe = forge.util.encode64(pki.publicKeyFromPem(myPubPem).encrypt(n));
+                await fetch('/edit-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, newVal: mRec, senderCopy: mMe})});
+                syncSystem();
+            }
+        }
+        async function ui_del(id) {
+            if(confirm("Destroy packet?")) {
+                await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+                syncSystem();
+            }
+        }
+        function openFromInbox(s) {
+            const user = usersRaw.find(u => u.username === s);
             if(user) setTarget(user.username, user.publicKey);
         }
     </script>
