@@ -18,7 +18,6 @@
         .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .msg-btn { @apply opacity-0 group-hover:opacity-100 transition-all text-[12px] ml-2 cursor-pointer hover:text-cyber inline-block; }
         .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
     </style>
 </head>
@@ -41,13 +40,14 @@
     </nav>
 
     <main class="max-w-[1600px] mx-auto w-full flex-1 flex flex-col">
+        
         <section id="auth-section" class="max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber animate-slide-up">
-            <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase italic text-cyber">Security Terminal</h2>
+            <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase italic text-cyber">Login</h2>
             <div class="space-y-4">
                 <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white text-center font-bold outline-none focus:ring-2 focus:ring-cyber">
                 <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white text-center font-bold outline-none focus:ring-2 focus:ring-cyber">
-                <button onclick="handleAuth()" class="w-full bg-cyber text-black p-4 rounded-xl font-black uppercase text-xs shadow-lg hover:scale-[1.02] transition-transform">Authorize Access</button>
-                <button onclick="toggleAuth()" id="toggle-text" class="w-full text-center text-[10px] font-bold text-slate-500 hover:text-cyber uppercase mt-2">Initialize New Node</button>
+                <button id="main-btn" onclick="handleAuth()" class="w-full bg-cyber text-black p-4 rounded-xl font-black uppercase text-xs shadow-lg hover:scale-[1.02] transition-transform">Authorize Access</button>
+                <button onclick="toggleAuth()" id="toggle-text" class="w-full text-center text-[10px] font-bold text-slate-500 hover:text-cyber uppercase mt-2">يوزر جديد؟ Signup</button>
             </div>
         </section>
 
@@ -56,21 +56,21 @@
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
                 <div class="absolute bottom-4 left-4 right-4">
-                    <button onclick="location.reload()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Logout</button>
+                    <button onclick="location.reload()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
                 </div>
             </aside>
 
             <main class="lg:col-span-6 glass rounded-[2rem] flex flex-col overflow-hidden relative border-x border-white/5">
                 <div id="chat-header" class="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
                     <div class="flex items-center gap-3">
-                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase">?</div>
+                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
                         <div>
                             <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
                             <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter text-cyber">E2EE_ACTIVE</p>
                         </div>
                     </div>
                 </div>
-                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs text-white"></div>
+                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
                     <input type="text" id="m-input" placeholder="Type secure message..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
                     <button onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 transition-all">
@@ -81,17 +81,18 @@
 
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Node Discovery</p>
-                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full uppercase">
+                <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent ID..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full uppercase">
                 <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
             </aside>
         </div>
     </main>
 
     <script>
-        let isLogin = false, me = null, target = null, lastLen = 0, usersRaw = [];
+        // جعل تسجيل الدخول هو الحالة الافتراضية
+        let isLogin = true; 
+        let me = null, target = null, lastLen = 0, usersRaw = [];
         const pki = forge.pki;
 
-        // ثبات المفاتيح في الجلسة الواحدة
         const pair = pki.rsa.generateKeyPair(1024);
         const myPubPem = pki.publicKeyToPem(pair.publicKey);
         const myPriv = pair.privateKey;
@@ -104,19 +105,28 @@
 
         function toggleAuth() {
             isLogin = !isLogin;
-            document.getElementById('auth-title').innerText = isLogin ? 'Agent Login' : 'Security Terminal';
-            document.getElementById('toggle-text').innerText = isLogin ? 'New Identity? Register' : 'Switch to Login';
+            // تغيير النصوص بناءً على طلبك
+            document.getElementById('auth-title').innerText = isLogin ? 'Login' : 'Signup';
+            document.getElementById('main-btn').innerText = isLogin ? 'Authorize Access' : 'Register & Start';
+            document.getElementById('toggle-text').innerText = isLogin ? 'يوزر جديد؟ Signup' : 'لديك حساب؟ Login';
         }
 
         async function handleAuth() {
             const u = document.getElementById('username').value.trim().toLowerCase();
             const p = document.getElementById('password').value.trim();
             if(!u || !p) return alert("Credentials Missing");
+
             const endpoint = isLogin ? '/login' : '/register';
+            const payload = { username: u, password: p };
+            if (!isLogin) payload.publicKey = myPubPem;
+
             try {
-                const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: u, password: p, publicKey: myPubPem})});
+                const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
                 const data = await res.json();
-                if(res.ok) { me = data; enterTerminal(); } else alert(data.error);
+                if(res.ok) {
+                    me = data;
+                    enterTerminal();
+                } else alert(data.error);
             } catch (e) { alert("Connection Denied."); }
         }
 
@@ -136,7 +146,8 @@
                 usersRaw = await res.json();
                 document.getElementById('user-list').innerHTML = usersRaw.map(u => {
                     if(u.username === me.username) return '';
-                    return `<div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
+                    return `
+                    <div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
                         <span class="text-[10px] font-black uppercase text-white">@${u.username}</span>
                         <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
                     </div>`;
@@ -150,30 +161,31 @@
             document.getElementById('target-avatar').innerText = name[0].toUpperCase();
             document.getElementById('msgs-box').innerHTML = '';
             lastLen = 0;
-            syncSystem();
         }
 
         async function dispatchMsg() {
             const input = document.getElementById('m-input'), txt = input.value.trim();
             if(!txt || !target) return;
             try {
-                // تشفير للمستقبل
-                const tPub = pki.publicKeyFromPem(target.publicKey);
-                const mRec = forge.util.encode64(tPub.encrypt(txt));
-                // تشفير لنفسي (عشان تظهر في الهيستوري)
-                const mMe = forge.util.encode64(pki.publicKeyFromPem(myPubPem).encrypt(txt));
-
+                const pubKeyObj = pki.publicKeyFromPem(target.publicKey);
+                const encrypted = forge.util.encode64(pubKeyObj.encrypt(txt));
                 const res = await fetch('/send', { 
                     method: 'POST', 
                     headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ 
-                        sender: me.username, 
-                        receiver: target.username, 
-                        message: mRec, 
-                        senderCopy: mMe // الحقل ده هو اللي بيحفظ الهيستوري عندك
-                    }) 
+                    body: JSON.stringify({ sender: me.username, receiver: target.username, message: encrypted }) 
                 });
-                if(res.ok) { input.value = ''; syncSystem(); }
+                if(res.ok) {
+                    const box = document.getElementById('msgs-box');
+                    box.innerHTML += `
+                        <div class="flex justify-end animate-slide-up">
+                            <div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg">
+                                <p>${txt}</p>
+                                <p class="text-[7px] mt-1 opacity-50 uppercase tracking-tighter">Ciphertext Transmitted</p>
+                            </div>
+                        </div>`;
+                    input.value = '';
+                    box.scrollTop = box.scrollHeight;
+                }
             } catch (e) { alert("Encryption Fault."); }
         }
 
@@ -182,73 +194,41 @@
             try {
                 const res = await fetch(`/messages/${me.username}`);
                 const msgs = await res.json();
-                
-                // تحديث الإنبوكس (الجانب الأيسر)
-                const inboxData = {};
-                msgs.forEach(m => {
-                    const peer = m.sender === me.username ? m.receiver : m.sender;
-                    if(!inboxData[peer]) inboxData[peer] = m;
-                });
-
-                document.getElementById('inbox-list').innerHTML = Object.keys(inboxData).map(s => {
-                    let preview = "🔒 Secured";
-                    try {
-                        const m = inboxData[s];
-                        const dec = myPriv.decrypt(forge.util.decode64(m.sender === me.username ? m.senderCopy : m.message));
-                        preview = dec.substring(0, 15);
-                    } catch(e) {}
-                    return `<div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/10 relative transition-all">
-                        <div class="notification-dot"></div><p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
-                        <p class="text-[10px] opacity-70 truncate text-white italic">${preview}...</p>
-                    </div>`;
-                }).join('');
-
-                // تحديث الشات (الهيستوري)
+                const uniqueSenders = {};
+                msgs.forEach(m => { uniqueSenders[m.sender] = m; });
+                const inboxArea = document.getElementById('inbox-list');
+                inboxArea.innerHTML = Object.keys(uniqueSenders).map(s => `
+                    <div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
+                        <div class="notification-dot"></div>
+                        <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
+                        <p class="text-[8px] opacity-60 truncate text-white">Incoming Secured Packet...</p>
+                    </div>
+                `).join('');
                 if(target) {
                     const box = document.getElementById('msgs-box');
-                    const chatMsgs = msgs.filter(m => (m.sender === target.username && m.receiver === me.username) || (m.sender === me.username && m.receiver === target.username));
-                    
-                    if(chatMsgs.length !== lastLen) {
-                        box.innerHTML = chatMsgs.map(m => {
-                            const isMe = m.sender === me.username;
-                            let d = "";
-                            try { d = myPriv.decrypt(forge.util.decode64(isMe ? m.senderCopy : m.message)); } catch(e) { d = "🔒 Decryption Fail"; }
-                            return `<div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up group">
-                                <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-3 rounded-2xl max-w-[85%] mb-2 shadow-lg relative">
-                                    <p class="text-[7px] opacity-50 mb-1 uppercase">${m.sender}</p>
-                                    <p class="text-xs">${d}</p>
-                                    ${isMe ? `<div class="mt-1 border-t border-black/10 pt-1 text-right">
-                                        <span onclick="ui_edit('${m.id}')" class="msg-btn">✎</span>
-                                        <span onclick="ui_del('${m.id}')" class="msg-btn text-red-600">✖</span>
-                                    </div>` : ''}
-                                </div></div>`;
-                        }).join('');
-                        lastLen = chatMsgs.length;
+                    const currentMsgs = msgs.filter(m => m.sender === target.username);
+                    if(currentMsgs.length > lastLen) {
+                        currentMsgs.slice(lastLen).forEach(m => {
+                            try {
+                                const decrypted = myPriv.decrypt(forge.util.decode64(m.message));
+                                box.innerHTML += `
+                                    <div class="flex justify-start animate-slide-up">
+                                        <div class="glass p-3 rounded-2xl rounded-tl-none max-w-[80%] border border-white/10 text-white">
+                                            <p class="text-[7px] text-cyber font-black mb-1 uppercase">${m.sender}</p>
+                                            <p>${decrypted}</p>
+                                        </div>
+                                    </div>`;
+                            } catch (e) { console.log("Incoming cipher data..."); }
+                        });
+                        lastLen = currentMsgs.length;
                         box.scrollTop = box.scrollHeight;
                     }
                 }
             } catch (e) {}
         }
 
-        async function ui_edit(id) {
-            const n = prompt("Edit payload:");
-            if(n) {
-                // لازم نشفر التعديل برضه عشان يفضل محمي
-                const tPub = pki.publicKeyFromPem(target.publicKey);
-                const mRec = forge.util.encode64(tPub.encrypt(n));
-                const mMe = forge.util.encode64(pki.publicKeyFromPem(myPubPem).encrypt(n));
-                await fetch('/edit-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, newVal: mRec, senderCopy: mMe})});
-                syncSystem();
-            }
-        }
-        async function ui_del(id) {
-            if(confirm("Destroy packet?")) {
-                await fetch('/del-msg', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
-                syncSystem();
-            }
-        }
-        function openFromInbox(s) {
-            const user = usersRaw.find(u => u.username === s);
+        function openFromInbox(senderName) {
+            const user = usersRaw.find(u => u.username === senderName);
             if(user) setTarget(user.username, user.publicKey);
         }
     </script>
