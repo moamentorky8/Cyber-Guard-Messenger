@@ -135,14 +135,15 @@ app.post('/send', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "خطأ إرسال" }); }
 });
 
-// جلب الرسائل (بدون حذف فوراً لدعم الهيستوري)
+// --- تعديل الـ Sync All المطلوب فقط ---
 app.get('/messages/:username', async (req, res) => {
     try {
         const user = req.params.username.toLowerCase().trim();
         const snapshot = await db.ref("messages").once("value");
         const allMsgs = snapshot.val() || {};
         
-        // جلب الرسايل اللي إنت طرف فيها (مرسل أو مستلم)
+        // جلب الرسائل التي يكون المستخدم طرفاً فيها (سواء مرسل أو مستلم)
+        // هذا يضمن بقاء الهيستوري كاملاً عند الطرفين
         const myMsgs = Object.values(allMsgs).filter(m => 
             m.receiver === user || m.sender === user
         );
