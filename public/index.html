@@ -59,6 +59,7 @@
         </section>
 
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
+            
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative border-r border-white/5">
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
@@ -139,10 +140,7 @@
         async function saveHandle() {
             const h = document.getElementById('new-handle-input').value.trim();
             if(!h) return alert("Nickname required");
-            
-            // إصلاح: جلب اليوزر نيم من الإدخال لو الكائن me لسه متحدثش
             const curUser = (me && me.username) ? me.username : document.getElementById('username').value.trim().toLowerCase();
-            
             const res = await fetch('/set-handle', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
@@ -187,6 +185,7 @@
             document.getElementById('target-avatar').innerText = name[0].toUpperCase();
             document.getElementById('msgs-box').innerHTML = '';
             lastLen = 0;
+            syncSystem(); 
         }
 
         async function dispatchMsg() {
@@ -201,10 +200,8 @@
                     body: JSON.stringify({ sender: me.username, receiver: target.username, message: encrypted }) 
                 });
                 if(res.ok) {
-                    const box = document.getElementById('msgs-box');
-                    box.innerHTML += `<div class="flex justify-end animate-slide-up"><div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg mb-2"><p>${txt}</p></div></div>`;
                     input.value = '';
-                    box.scrollTop = box.scrollHeight;
+                    syncSystem(); 
                 }
             } catch (e) { alert("Encryption Fault."); }
         }
@@ -214,32 +211,48 @@
             try {
                 const res = await fetch(`/messages/${me.username}`);
                 const msgs = await res.json();
+                
+                // 1. تحديث الإنبوكس (يظهر فقط ما استلمته من الآخرين)
                 const uniqueSenders = {};
-                msgs.forEach(m => { uniqueSenders[m.sender] = m; });
+                msgs.forEach(m => {
+                    if (m.receiver === me.username) {
+                        if (!uniqueSenders[m.sender]) uniqueSenders[m.sender] = m;
+                    }
+                });
+                
                 const inboxArea = document.getElementById('inbox-list');
                 inboxArea.innerHTML = Object.keys(uniqueSenders).map(s => `
-                    <div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
+                    <div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative animate-slide-up">
                         <div class="notification-dot"></div>
                         <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
-                        <p class="text-[8px] opacity-60 truncate text-white italic italic">Packet Received</p>
+                        <p class="text-[8px] opacity-60 truncate text-white italic">Secured Packet Received</p>
                     </div>
                 `).join('');
+
+                // 2. تحديث الشات (الهيستوري المزدوج)
                 if(target) {
                     const box = document.getElementById('msgs-box');
-                    const currentMsgs = msgs.filter(m => m.sender === target.username);
-                    if(currentMsgs.length > lastLen) {
-                        currentMsgs.slice(lastLen).forEach(m => {
+                    const currentChatMsgs = msgs.filter(m => 
+                        (m.sender === target.username && m.receiver === me.username) || 
+                        (m.sender === me.username && m.receiver === target.username)
+                    );
+
+                    if(currentChatMsgs.length !== lastLen) {
+                        box.innerHTML = currentChatMsgs.map(m => {
+                            const isMe = m.sender === me.username;
+                            let content = "";
                             try {
-                                const decrypted = myPriv.decrypt(forge.util.decode64(m.message));
-                                box.innerHTML += `
-                                    <div class="flex justify-start animate-slide-up">
-                                        <div class="glass p-3 rounded-2xl rounded-tl-none max-w-[80%] border border-white/10 text-white mb-2">
-                                            <p class="text-[7px] text-cyber font-black mb-1 uppercase">${m.sender}</p>
-                                            <p>${decrypted}</p>
-                                        </div>
-                                    </div>`;
-                            } catch (e) {}
-                        });
+                                content = isMe ? "🔒 Encrypted & Transmitted" : myPriv.decrypt(forge.util.decode64(m.message));
+                            } catch (e) { content = "🔒 Secured Data"; }
+
+                            return `
+                                <div class="flex ${isMe ? 'justify-end' : 'justify-start'} animate-slide-up">
+                                    <div class="${isMe ? 'bg-cyber text-black font-black' : 'glass text-white'} p-3 rounded-2xl max-w-[80%] border border-white/10 mb-2 shadow-lg">
+                                        <p class="text-[7px] opacity-50 mb-1 uppercase">${m.sender}</p>
+                                        <p class="text-xs">${content}</p>
+                                    </div>
+                                </div>`;
+                        }).join('');
                         lastLen = currentMsgs.length;
                         box.scrollTop = box.scrollHeight;
                     }
