@@ -2,511 +2,602 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>CYBER MESSENGER | MOAMEN ABDELFATTAH</title>
-
+    <title>Cyber Messenger</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
     <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script>
-
-        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { cyber: '#06b6d4' } } } }
-
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: "#06b6d4"
+                    }
+                }
+            }
+        };
     </script>
-
     <style>
+        body {
+            font-family: "Inter", sans-serif;
+            transition: background 0.3s, color 0.3s;
+            user-select: none;
+        }
 
-        body { font-family: 'Inter', sans-serif; transition: background 0.3s, color 0.3s; user-select: none !important; }
+        .mono {
+            font-family: "JetBrains Mono", monospace;
+        }
 
-        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            box-shadow: 0 10px 40px rgba(2, 6, 23, 0.25);
+        }
 
-        .glass { @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800; }
+        .chat-area::-webkit-scrollbar {
+            width: 6px;
+        }
 
-        .chat-area::-webkit-scrollbar { width: 4px; }
+        .chat-area::-webkit-scrollbar-thumb {
+            background: rgba(6, 182, 212, 0.35);
+            border-radius: 999px;
+        }
 
-        .chat-area::-webkit-scrollbar-thumb { @apply bg-cyber/30 rounded; }
+        .animate-slide-up {
+            animation: slideUp 0.25s ease-out;
+        }
 
-        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        .notification-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 999px;
+            background: #ef4444;
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            animation: pulse 1.4s infinite;
+        }
 
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
 
-        .notification-dot { @apply w-2 h-2 bg-red-500 rounded-full absolute top-2 right-2 animate-pulse; }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
     </style>
-
 </head>
-
 <body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen p-4 flex flex-col">
-
-
-
-    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-lg rounded-2xl mb-6">
-
+    <nav class="glass sticky top-0 z-50 px-6 py-4 flex justify-between items-center rounded-2xl mb-6">
         <div class="flex flex-col">
-
-            <h1 class="text-xl font-black tracking-tighter text-cyber uppercase italic font-mono">Cyber Messenger</h1>
-
-            <p class="text-[10px] font-bold opacity-60 tracking-widest uppercase">Prepared by: Moamen Abdelfattah</p>
-
+            <h1 class="text-xl font-black tracking-tighter text-cyber uppercase italic mono">Cyber Messenger</h1>
+            <p class="text-[10px] font-bold opacity-60 tracking-widest uppercase">Persistent local keys + protected session</p>
         </div>
-
         <div class="flex items-center gap-4">
-
+            <a href="/reset" class="text-[10px] font-bold uppercase text-slate-400 hover:text-cyber transition">Reset Password</a>
             <button onclick="toggleTheme()" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 transition shadow-inner">
-
                 <span id="theme-icon" class="text-lg">🌙</span>
-
             </button>
-
-            <div id="user-badge-nav" class="hidden flex items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
-
+            <div id="user-badge-nav" class="hidden items-center gap-2 bg-cyber/10 px-3 py-1 rounded-full border border-cyber/20">
                 <div class="w-2 h-2 bg-cyber rounded-full animate-pulse"></div>
-
                 <span id="active-user" class="text-xs font-bold mono"></span>
-
             </div>
-
         </div>
-
     </nav>
 
-
-
     <main class="max-w-[1600px] mx-auto w-full flex-1 flex flex-col">
-
-        
-
-        <section id="auth-section" class="max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] shadow-2xl border-t-4 border-cyber animate-slide-up">
-
+        <section id="auth-section" class="max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] border-t-4 border-cyber animate-slide-up">
             <h2 id="auth-title" class="text-center text-2xl font-black mb-8 uppercase italic text-cyber">Login</h2>
-
             <div class="space-y-4">
-
                 <input type="text" id="username" placeholder="Agent ID" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white text-center font-bold outline-none focus:ring-2 focus:ring-cyber">
-
                 <input type="password" id="password" placeholder="Passcode" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-white text-center font-bold outline-none focus:ring-2 focus:ring-cyber">
-
                 <button id="main-btn" onclick="handleAuth()" class="w-full bg-cyber text-black p-4 rounded-xl font-black uppercase text-xs shadow-lg hover:scale-[1.02] transition-transform">Authorize Access</button>
-
-                <button onclick="toggleAuth()" id="toggle-text" class="w-full text-center text-[10px] font-bold text-slate-500 hover:text-cyber uppercase mt-2">يوزر جديد؟ Signup</button>
-
+                <button onclick="toggleAuth()" id="toggle-text" class="w-full text-center text-[10px] font-bold text-slate-500 hover:text-cyber uppercase mt-2">New user? Signup</button>
+                <p class="text-[10px] text-center text-slate-500">Private keys stay on this device. If local storage is lost, old messages cannot be decrypted.</p>
             </div>
-
         </section>
-
-
 
         <section id="setup-section" class="hidden max-w-md mx-auto mt-12 w-full glass p-8 rounded-[2rem] border-t-4 border-green-500 animate-slide-up text-center">
-
             <h2 class="text-2xl font-black text-green-500 mb-4 uppercase italic">Identity Setup</h2>
-
             <p class="text-[10px] opacity-60 mb-4 uppercase text-white">Set your @nickname for discovery</p>
-
             <input type="text" id="new-handle-input" placeholder="@nickname" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 outline-none mb-4 text-center text-white focus:ring-2 focus:ring-green-500 font-bold">
-
             <button onclick="saveHandle()" class="w-full bg-green-500 text-white p-4 rounded-xl font-black uppercase text-xs">Confirm Identity</button>
-
         </section>
 
-
-
         <div id="chat-section" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-4 h-[80vh] animate-slide-up overflow-hidden">
-
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden relative border-r border-white/5">
-
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Historical Inbox</p>
-
                 <div id="inbox-list" class="flex-1 overflow-y-auto space-y-2 chat-area pb-20"></div>
-
-                <div class="absolute bottom-4 left-4 right-4">
-
-                    <button onclick="location.reload()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
-
+                <div class="absolute bottom-4 left-4 right-4 space-y-2">
+                    <button onclick="logout()" class="w-full bg-red-500/20 text-red-500 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition">Terminate Session</button>
                 </div>
-
             </aside>
-
-
 
             <main class="lg:col-span-6 glass rounded-[2rem] flex flex-col overflow-hidden relative border-x border-white/5">
-
-                <div id="chat-header" class="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
-
+                <div class="p-4 border-b border-white/10 flex items-center justify-between bg-white/5">
                     <div class="flex items-center gap-3">
-
-                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber font-mono uppercase tracking-tighter">?</div>
-
+                        <div id="target-avatar" class="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center font-black text-cyber mono uppercase tracking-tighter">?</div>
                         <div>
-
-                            <h3 id="t-name" class="font-bold text-sm uppercase italic text-white font-mono">Select Node</h3>
-
+                            <h3 id="t-name" class="font-bold text-sm uppercase italic text-white mono">Select Node</h3>
                             <p id="t-status" class="text-[8px] opacity-40 uppercase font-black tracking-tighter text-cyber">E2EE_ACTIVE</p>
-
                         </div>
-
                     </div>
-
+                    <p id="session-note" class="text-[10px] uppercase tracking-widest text-slate-500">Polling every 2s</p>
                 </div>
-
-                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 font-mono text-xs text-white"></div>
-
+                <div id="msgs-box" class="flex-1 overflow-y-auto p-6 space-y-4 chat-area bg-slate-900/10 mono text-xs text-white"></div>
                 <div class="p-4 bg-black/20 flex gap-3 items-center">
-
                     <input type="text" id="m-input" placeholder="Type secure message..." class="flex-1 bg-transparent outline-none text-sm px-4 text-white">
-
                     <button onclick="dispatchMsg()" class="bg-cyber text-black p-3 rounded-xl font-black hover:scale-105 transition-all">
-
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
                     </button>
-
                 </div>
-
             </main>
 
-
-
             <aside class="lg:col-span-3 glass rounded-[2rem] p-5 flex flex-col overflow-hidden">
-
                 <p class="text-[9px] font-black text-cyber uppercase mb-4 tracking-widest italic border-b border-white/5 pb-2">Node Discovery</p>
-
                 <input type="text" id="searchInput" oninput="loadUsers()" placeholder="Search Agent ID..." class="mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-cyber transition text-white w-full uppercase">
-
                 <div id="user-list" class="flex-1 overflow-y-auto space-y-2 chat-area"></div>
-
             </aside>
-
         </div>
-
     </main>
 
-
-
     <script>
-
-        let isLogin = true, me = null, target = null, lastLen = 0, usersRaw = [];
+        let isLogin = true;
+        let me = null;
+        let target = null;
+        let usersRaw = [];
+        let allMessages = [];
+        let syncTimer = null;
 
         const pki = forge.pki;
 
-
-
-        const pair = pki.rsa.generateKeyPair(1024);
-
-        const myPubPem = pki.publicKeyToPem(pair.publicKey);
-
-        const myPriv = pair.privateKey;
-
-
-
         function toggleTheme() {
-
             const html = document.documentElement;
-
-            html.classList.toggle('dark');
-
-            document.getElementById('theme-icon').innerText = html.classList.contains('dark') ? '🌙' : '☀️';
-
+            html.classList.toggle("dark");
+            const dark = html.classList.contains("dark");
+            localStorage.theme = dark ? "dark" : "light";
+            document.getElementById("theme-icon").innerText = dark ? "🌙" : "☀️";
         }
 
+        function applyTheme() {
+            const dark =
+                localStorage.theme === "dark" ||
+                (!("theme" in localStorage) &&
+                    window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-
-        function toggleAuth() {
-
-            isLogin = !isLogin;
-
-            document.getElementById('auth-title').innerText = isLogin ? 'Login' : 'Signup';
-
-            document.getElementById('main-btn').innerText = isLogin ? 'Authorize Access' : 'Register & Start';
-
-            document.getElementById('toggle-text').innerText = isLogin ? 'يوزر جديد؟ Signup' : 'لديك حساب؟ Login';
-
+            document.documentElement.classList.toggle("dark", dark);
+            document.getElementById("theme-icon").innerText = dark ? "🌙" : "☀️";
         }
 
-
-
-        async function handleAuth() {
-
-            const u = document.getElementById('username').value.trim().toLowerCase();
-
-            const p = document.getElementById('password').value.trim();
-
-            if(!u || !p) return alert("Credentials Missing");
-
-
-
-            const endpoint = isLogin ? '/login' : '/register';
-
-            const payload = { username: u, password: p, publicKey: myPubPem };
-
-
-
-            try {
-
-                const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
-
-                const data = await res.json();
-
-                if(res.ok) {
-
-                    me = data; 
-
-                    if(!isLogin && (!me.handle || me.handle === "")) {
-
-                        document.getElementById('auth-section').classList.add('hidden');
-
-                        document.getElementById('setup-section').classList.remove('hidden');
-
-                    } else { enterTerminal(); }
-
-                } else alert(data.error);
-
-            } catch (e) { alert("Connection Denied."); }
-
+        function storageKey(username) {
+            return `cg_keys_${String(username || "").toLowerCase()}`;
         }
 
-
-
-        async function saveHandle() {
-
-            const h = document.getElementById('new-handle-input').value.trim();
-
-            if(!h) return alert("Nickname required");
-
-            
-
-            // إصلاح: جلب اليوزر نيم من الإدخال لو الكائن me لسه متحدثش
-
-            const curUser = (me && me.username) ? me.username : document.getElementById('username').value.trim().toLowerCase();
-
-            
-
-            const res = await fetch('/set-handle', { 
-
-                method: 'POST', 
-
-                headers: {'Content-Type': 'application/json'}, 
-
-                body: JSON.stringify({username: curUser, handle: h})
-
-            });
-
-            if(res.ok) { 
-
-                if(!me) me = { username: curUser };
-
-                me.handle = h; 
-
-                enterTerminal(); 
-
+        function readStoredKeys(username) {
+            const raw = localStorage.getItem(storageKey(username));
+            if (!raw) {
+                return null;
             }
 
+            try {
+                return JSON.parse(raw);
+            } catch (error) {
+                return null;
+            }
         }
 
+        function createAndStoreKeys(username) {
+            const pair = pki.rsa.generateKeyPair({ bits: 1024, workers: 2 });
+            const payload = {
+                publicKey: pki.publicKeyToPem(pair.publicKey),
+                privateKey: pki.privateKeyToPem(pair.privateKey)
+            };
 
-
-        function enterTerminal() {
-
-            document.getElementById('auth-section').classList.add('hidden');
-
-            document.getElementById('setup-section').classList.add('hidden');
-
-            document.getElementById('chat-section').classList.remove('hidden');
-
-            document.getElementById('user-badge-nav').classList.remove('hidden');
-
-            document.getElementById('active-user').innerText = "@" + (me.handle || me.username);
-
-            setInterval(syncSystem, 2000);
-
+            localStorage.setItem(storageKey(username), JSON.stringify(payload));
+            return payload;
         }
 
+        function getOrCreateKeys(username) {
+            return readStoredKeys(username) || createAndStoreKeys(username);
+        }
 
+        function getPrivateKeyObject() {
+            if (!me) {
+                return null;
+            }
 
-        async function loadUsers() {
-
-            const q = document.getElementById('searchInput').value.toLowerCase().trim();
-
-            const container = document.getElementById('user-list');
-
-            if (q === "") { container.innerHTML = ""; return; }
+            const keys = readStoredKeys(me.username);
+            if (!keys || !keys.privateKey) {
+                return null;
+            }
 
             try {
-
-                const res = await fetch(`/users?search=${q}`);
-
-                usersRaw = await res.json();
-
-                container.innerHTML = usersRaw.map(u => {
-
-                    if(u.username === me.username) return '';
-
-                    return `<div onclick="setTarget('${u.username}', \`${u.publicKey}\`)" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
-
-                        <span class="text-[10px] font-black uppercase text-white">@${u.handle || u.username}</span>
-
-                        <div class="w-1.5 h-1.5 rounded-full ${u.status === 'online' ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-slate-700'}"></div>
-
-                    </div>`;
-
-                }).join('');
-
-            } catch (e) {}
-
+                return pki.privateKeyFromPem(keys.privateKey);
+            } catch (error) {
+                return null;
+            }
         }
 
-
-
-        function setTarget(name, pubKey) {
-
-            target = { username: name, publicKey: pubKey.trim() };
-
-            document.getElementById('t-name').innerText = name.toUpperCase();
-
-            document.getElementById('target-avatar').innerText = name[0].toUpperCase();
-
-            document.getElementById('msgs-box').innerHTML = '';
-
-            lastLen = 0;
-
+        function setAuthMode(loginMode) {
+            isLogin = loginMode;
+            document.getElementById("auth-title").innerText = isLogin ? "Login" : "Signup";
+            document.getElementById("main-btn").innerText = isLogin ? "Authorize Access" : "Register & Start";
+            document.getElementById("toggle-text").innerText = isLogin ? "New user? Signup" : "Already registered? Login";
         }
 
-
-
-        async function dispatchMsg() {
-
-            const input = document.getElementById('m-input'), txt = input.value.trim();
-
-            if(!txt || !target) return;
-
-            try {
-
-                const pubKeyObj = pki.publicKeyFromPem(target.publicKey);
-
-                const encrypted = forge.util.encode64(pubKeyObj.encrypt(txt));
-
-                const res = await fetch('/send', { 
-
-                    method: 'POST', 
-
-                    headers: {'Content-Type': 'application/json'}, 
-
-                    body: JSON.stringify({ sender: me.username, receiver: target.username, message: encrypted }) 
-
-                });
-
-                if(res.ok) {
-
-                    const box = document.getElementById('msgs-box');
-
-                    box.innerHTML += `<div class="flex justify-end animate-slide-up"><div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg mb-2"><p>${txt}</p></div></div>`;
-
-                    input.value = '';
-
-                    box.scrollTop = box.scrollHeight;
-
-                }
-
-            } catch (e) { alert("Encryption Fault."); }
-
+        function toggleAuth() {
+            setAuthMode(!isLogin);
         }
 
-
-
-        async function syncSystem() {
-
-            if(!me) return;
-
-            try {
-
-                const res = await fetch(`/messages/${me.username}`);
-
-                const msgs = await res.json();
-
-                const uniqueSenders = {};
-
-                msgs.forEach(m => { uniqueSenders[m.sender] = m; });
-
-                const inboxArea = document.getElementById('inbox-list');
-
-                inboxArea.innerHTML = Object.keys(uniqueSenders).map(s => `
-
-                    <div onclick="openFromInbox('${s}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
-
-                        <div class="notification-dot"></div>
-
-                        <p class="text-[9px] font-black uppercase text-cyber">@${s}</p>
-
-                        <p class="text-[8px] opacity-60 truncate text-white italic italic">Packet Received</p>
-
-                    </div>
-
-                `).join('');
-
-                if(target) {
-
-                    const box = document.getElementById('msgs-box');
-
-                    const currentMsgs = msgs.filter(m => m.sender === target.username);
-
-                    if(currentMsgs.length > lastLen) {
-
-                        currentMsgs.slice(lastLen).forEach(m => {
-
-                            try {
-
-                                const decrypted = myPriv.decrypt(forge.util.decode64(m.message));
-
-                                box.innerHTML += `
-
-                                    <div class="flex justify-start animate-slide-up">
-
-                                        <div class="glass p-3 rounded-2xl rounded-tl-none max-w-[80%] border border-white/10 text-white mb-2">
-
-                                            <p class="text-[7px] text-cyber font-black mb-1 uppercase">${m.sender}</p>
-
-                                            <p>${decrypted}</p>
-
-                                        </div>
-
-                                    </div>`;
-
-                            } catch (e) {}
-
-                        });
-
-                        lastLen = currentMsgs.length;
-
-                        box.scrollTop = box.scrollHeight;
-
-                    }
-
-                }
-
-            } catch (e) {}
-
-        }
-
-
-
-        function openFromInbox(senderName) {
-
-            fetch(`/users?search=${senderName}`).then(r => r.json()).then(data => {
-
-                const u = data.find(x => x.username === senderName);
-
-                if(u) setTarget(u.username, u.publicKey);
-
+        async function requestJson(url, options = {}) {
+            const response = await fetch(url, {
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(options.headers || {})
+                },
+                ...options
             });
 
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (error) {
+                data = {};
+            }
+
+            return { response, data };
         }
 
+        async function handleAuth() {
+            const username = document.getElementById("username").value.trim().toLowerCase();
+            const password = document.getElementById("password").value.trim();
+            if (!username || !password) {
+                return alert("Credentials missing.");
+            }
+
+            const keys = getOrCreateKeys(username);
+            const endpoint = isLogin ? "/login" : "/register";
+            const { response, data } = await requestJson(endpoint, {
+                method: "POST",
+                body: JSON.stringify({
+                    username,
+                    password,
+                    publicKey: keys.publicKey
+                })
+            });
+
+            if (!response.ok) {
+                return alert(data.error || "Authentication failed.");
+            }
+
+            me = data;
+            if (!isLogin && !me.handle) {
+                document.getElementById("auth-section").classList.add("hidden");
+                document.getElementById("setup-section").classList.remove("hidden");
+                return;
+            }
+
+            enterTerminal();
+        }
+
+        async function saveHandle() {
+            const handle = document.getElementById("new-handle-input").value.trim();
+            if (!handle) {
+                return alert("Nickname required.");
+            }
+
+            const { response, data } = await requestJson("/set-handle", {
+                method: "POST",
+                body: JSON.stringify({ handle })
+            });
+
+            if (!response.ok) {
+                return alert(data.error || "Failed to update handle.");
+            }
+
+            me.handle = data.handle || handle;
+            enterTerminal();
+        }
+
+        async function logout() {
+            await requestJson("/logout", { method: "POST", body: JSON.stringify({}) });
+            if (syncTimer) {
+                clearInterval(syncTimer);
+                syncTimer = null;
+            }
+
+            me = null;
+            target = null;
+            allMessages = [];
+            document.getElementById("chat-section").classList.add("hidden");
+            document.getElementById("setup-section").classList.add("hidden");
+            document.getElementById("auth-section").classList.remove("hidden");
+            document.getElementById("user-badge-nav").classList.add("hidden");
+            document.getElementById("user-badge-nav").classList.remove("flex");
+            document.getElementById("msgs-box").innerHTML = "";
+            document.getElementById("inbox-list").innerHTML = "";
+            document.getElementById("user-list").innerHTML = "";
+            setAuthMode(true);
+        }
+
+        function enterTerminal() {
+            document.getElementById("auth-section").classList.add("hidden");
+            document.getElementById("setup-section").classList.add("hidden");
+            document.getElementById("chat-section").classList.remove("hidden");
+            document.getElementById("user-badge-nav").classList.remove("hidden");
+            document.getElementById("user-badge-nav").classList.add("flex");
+            document.getElementById("active-user").innerText = "@" + (me.handle || me.username);
+
+            if (syncTimer) {
+                clearInterval(syncTimer);
+            }
+
+            syncSystem();
+            syncTimer = setInterval(syncSystem, 2000);
+        }
+
+        async function loadUsers() {
+            const query = document.getElementById("searchInput").value.toLowerCase().trim();
+            const container = document.getElementById("user-list");
+
+            if (!query) {
+                container.innerHTML = "";
+                return;
+            }
+
+            const { response, data } = await requestJson(`/users?search=${encodeURIComponent(query)}`, {
+                method: "GET"
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                }
+                return;
+            }
+
+            usersRaw = Array.isArray(data) ? data : [];
+            container.innerHTML = usersRaw
+                .map((user) => {
+                    return `<div onclick="setTarget('${user.username}')" class="p-3 glass rounded-xl cursor-pointer hover:bg-cyber/10 mb-1 border border-white/5 flex justify-between items-center transition-all animate-slide-up">
+                        <span class="text-[10px] font-black uppercase text-white">@${user.handle || user.username}</span>
+                        <div class="w-1.5 h-1.5 rounded-full ${user.status === "online" ? "bg-green-500 shadow-[0_0_5px_#22c55e]" : "bg-slate-700"}"></div>
+                    </div>`;
+                })
+                .join("");
+        }
+
+        function findUser(username) {
+            return usersRaw.find((user) => user.username === username) || null;
+        }
+
+        function setTarget(username) {
+            const user = findUser(username);
+            if (!user) {
+                return;
+            }
+
+            target = user;
+            document.getElementById("t-name").innerText = (user.handle || user.username).toUpperCase();
+            document.getElementById("target-avatar").innerText = user.username[0].toUpperCase();
+            renderConversation();
+        }
+
+        function conversationMessages() {
+            if (!me || !target) {
+                return [];
+            }
+
+            return allMessages.filter((message) => {
+                const sentToTarget =
+                    message.sender === me.username && message.receiver === target.username;
+                const receivedFromTarget =
+                    message.sender === target.username && message.receiver === me.username;
+
+                return sentToTarget || receivedFromTarget;
+            });
+        }
+
+        function decryptMessage(message) {
+            const privateKey = getPrivateKeyObject();
+            if (!privateKey) {
+                return "[missing local private key]";
+            }
+
+            const encrypted = message.sender === me.username ? message.senderCopy : message.message;
+            if (!encrypted) {
+                return "[missing encrypted payload]";
+            }
+
+            try {
+                return privateKey.decrypt(forge.util.decode64(encrypted));
+            } catch (error) {
+                return "[unable to decrypt]";
+            }
+        }
+
+        function renderConversation() {
+            const box = document.getElementById("msgs-box");
+            if (!target) {
+                box.innerHTML = "";
+                return;
+            }
+
+            const messages = conversationMessages();
+            box.innerHTML = messages
+                .map((message) => {
+                    const mine = message.sender === me.username;
+                    const plainText = decryptMessage(message);
+
+                    if (mine) {
+                        return `<div class="flex justify-end animate-slide-up">
+                            <div class="bg-cyber text-black font-black p-3 rounded-2xl rounded-tr-none max-w-[80%] shadow-lg mb-2">
+                                <p>${escapeHtml(plainText)}</p>
+                            </div>
+                        </div>`;
+                    }
+
+                    return `<div class="flex justify-start animate-slide-up">
+                        <div class="glass p-3 rounded-2xl rounded-tl-none max-w-[80%] border border-white/10 text-white mb-2">
+                            <p class="text-[7px] text-cyber font-black mb-1 uppercase">${escapeHtml(message.sender)}</p>
+                            <p>${escapeHtml(plainText)}</p>
+                        </div>
+                    </div>`;
+                })
+                .join("");
+
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function renderInbox() {
+            const inboxArea = document.getElementById("inbox-list");
+            if (!me) {
+                inboxArea.innerHTML = "";
+                return;
+            }
+
+            const threads = new Map();
+            allMessages.forEach((message) => {
+                const peer = message.sender === me.username ? message.receiver : message.sender;
+                const current = threads.get(peer);
+                if (!current || Number(message.timestamp || 0) > Number(current.timestamp || 0)) {
+                    threads.set(peer, message);
+                }
+            });
+
+            const orderedPeers = Array.from(threads.entries())
+                .sort((a, b) => Number(b[1].timestamp || 0) - Number(a[1].timestamp || 0))
+                .map(([peer]) => peer);
+
+            inboxArea.innerHTML = orderedPeers
+                .map((peer) => {
+                    const user = findUser(peer) || { username: peer, handle: peer };
+                    return `<div onclick="openFromInbox('${peer}')" class="p-3 glass rounded-xl cursor-pointer border-l-2 border-cyber mb-2 hover:bg-cyber/5 relative">
+                        <div class="notification-dot"></div>
+                        <p class="text-[9px] font-black uppercase text-cyber">@${escapeHtml(user.handle || user.username)}</p>
+                        <p class="text-[8px] opacity-60 truncate text-white italic">Secure history available</p>
+                    </div>`;
+                })
+                .join("");
+        }
+
+        async function dispatchMsg() {
+            const input = document.getElementById("m-input");
+            const text = input.value.trim();
+
+            if (!text || !target || !me) {
+                return;
+            }
+
+            try {
+                const recipientPublicKey = pki.publicKeyFromPem(target.publicKey);
+                const myKeys = readStoredKeys(me.username);
+                const myPublicKey = pki.publicKeyFromPem(myKeys.publicKey);
+                const encryptedForRecipient = forge.util.encode64(recipientPublicKey.encrypt(text));
+                const encryptedForSender = forge.util.encode64(myPublicKey.encrypt(text));
+
+                const { response, data } = await requestJson("/send", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        receiver: target.username,
+                        message: encryptedForRecipient,
+                        senderCopy: encryptedForSender
+                    })
+                });
+
+                if (!response.ok) {
+                    return alert(data.error || "Failed to send message.");
+                }
+
+                input.value = "";
+                await syncSystem();
+            } catch (error) {
+                alert("Encryption fault.");
+            }
+        }
+
+        async function syncSystem() {
+            if (!me) {
+                return;
+            }
+
+            const { response, data } = await requestJson("/messages", { method: "GET" });
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                }
+                return;
+            }
+
+            allMessages = Array.isArray(data) ? data : [];
+            renderInbox();
+            renderConversation();
+        }
+
+        function openFromInbox(username) {
+            const existing = findUser(username);
+            if (existing) {
+                setTarget(username);
+                return;
+            }
+
+            document.getElementById("searchInput").value = username;
+            loadUsers().then(() => setTarget(username));
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        async function bootstrapSession() {
+            applyTheme();
+            setAuthMode(true);
+
+            const { response, data } = await requestJson("/me", { method: "GET" });
+            if (!response.ok) {
+                return;
+            }
+
+            me = data;
+            if (!readStoredKeys(me.username)) {
+                alert("Session found, but local encryption keys are missing on this device. Old messages will stay unreadable until the original keys are restored.");
+            }
+
+            enterTerminal();
+        }
+
+        document.getElementById("m-input").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                dispatchMsg();
+            }
+        });
+
+        bootstrapSession();
     </script>
-
 </body>
-
 </html>

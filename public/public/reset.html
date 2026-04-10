@@ -1,72 +1,73 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RESET CREDENTIALS | MOAMEN ABDELFATTAH</title>
+    <title>Reset Credentials</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
-            darkMode: 'class',
-            theme: { extend: { colors: { cyber: '#06b6d4' } } }
-        }
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: "#06b6d4"
+                    }
+                }
+            }
+        };
     </script>
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: "Inter", sans-serif;
             transition: background 0.3s, color 0.3s;
         }
 
         .glass {
-            @apply bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-800;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            box-shadow: 0 10px 40px rgba(2, 6, 23, 0.25);
         }
     </style>
 </head>
-
-<body
-    class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen flex items-center justify-center p-6">
-
-    <div
-        class="max-w-md w-full glass p-10 rounded-[2.5rem] shadow-2xl border-t-4 border-red-500 relative overflow-hidden">
+<body class="bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-md w-full glass p-10 rounded-[2.5rem] border-t-4 border-red-500 relative overflow-hidden">
         <div class="absolute -top-10 -right-10 w-32 h-32 bg-red-500/10 rounded-full blur-3xl"></div>
 
         <div class="text-center mb-10">
-            <h1 class="text-sm font-black text-red-500 uppercase tracking-[0.3em] mb-2">Security Breach Recovery</h1>
-            <h2 class="text-3xl font-black text-slate-900 dark:text-white uppercase italic">Reset Identity</h2>
-            <p class="text-[10px] opacity-50 mt-2 uppercase font-bold tracking-widest">Prepared by: Moamen Abdelfattah
-            </p>
+            <h1 class="text-sm font-black text-red-500 uppercase tracking-[0.3em] mb-2">Security Recovery</h1>
+            <h2 class="text-3xl font-black text-slate-900 dark:text-white uppercase italic">Reset Password</h2>
+            <p class="text-[10px] opacity-50 mt-2 uppercase font-bold tracking-widest">Active session + current password required</p>
         </div>
 
         <div class="space-y-6">
             <div>
-                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">Confirm Agent
-                    Username</label>
-                <input type="text" id="reset-user" placeholder="Target Identifier"
-                    class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-red-500 transition">
+                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">Confirm Agent Username</label>
+                <input type="text" id="reset-user" placeholder="Target Identifier" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-red-500 transition">
             </div>
 
             <div>
-                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">New Secure
-                    Passcode</label>
-                <input type="password" id="new-pass" placeholder="••••••••"
-                    class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-red-500 transition">
+                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">Current Passcode</label>
+                <input type="password" id="current-pass" placeholder="Current passcode" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-red-500 transition">
             </div>
 
-            <button onclick="submitReset()"
-                class="w-full bg-red-600 hover:bg-red-500 text-white p-4 rounded-2xl font-black shadow-lg shadow-red-600/20 transition-all active:scale-95 uppercase text-xs tracking-widest">
+            <div>
+                <label class="block text-[10px] font-black text-slate-500 uppercase mb-2 ml-1">New Secure Passcode</label>
+                <input type="password" id="new-pass" placeholder="New passcode" class="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-red-500 transition">
+            </div>
+
+            <button onclick="submitReset()" class="w-full bg-red-600 hover:bg-red-500 text-white p-4 rounded-2xl font-black shadow-lg shadow-red-600/20 transition-all active:scale-95 uppercase text-xs tracking-widest">
                 Update Credentials
             </button>
 
+            <p class="text-[11px] text-slate-500 leading-5">
+                This page uses your active session cookie. If you are logged out, return to the main screen and sign in first.
+            </p>
+
             <div class="text-center mt-6">
-                <a href="/"
-                    class="text-xs font-bold text-slate-500 hover:text-cyber transition-all flex items-center justify-center gap-2 uppercase">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
-                        stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
+                <a href="/" class="text-xs font-bold text-slate-500 hover:text-cyber transition-all uppercase">
                     Return to Secure Login
                 </a>
             </div>
@@ -74,37 +75,44 @@
     </div>
 
     <script>
-        // دالة تغيير الثيم تلقائياً بناءً على اختيارك في الصفحة الرئيسية (اختياري)
-        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark')
-        } else {
-            document.documentElement.classList.remove('dark')
-        }
+        const dark =
+            localStorage.theme === "dark" ||
+            (!("theme" in localStorage) &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+        document.documentElement.classList.toggle("dark", dark);
 
         async function submitReset() {
-            const username = document.getElementById('reset-user').value;
-            const password = document.getElementById('new-pass').value;
+            const username = document.getElementById("reset-user").value.trim().toLowerCase();
+            const currentPassword = document.getElementById("current-pass").value.trim();
+            const newPassword = document.getElementById("new-pass").value.trim();
 
-            if (!username || !password) return alert("System Notice: All fields are mandatory.");
-
-            try {
-                const res = await fetch('/reset-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                if (res.ok) {
-                    alert("Success: Credentials updated and hashed with SHA-256.");
-                    window.location.href = "/";
-                } else {
-                    alert("Error: Identity verification failed. Check username.");
-                }
-            } catch (error) {
-                alert("Connection Error: Server unreachable.");
+            if (!username || !currentPassword || !newPassword) {
+                return alert("All fields are mandatory.");
             }
+
+            const response = await fetch("/reset-password", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    username,
+                    currentPassword,
+                    newPassword
+                })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) {
+                alert("Password updated successfully.");
+                window.location.href = "/";
+                return;
+            }
+
+            alert(data.error || "Password reset failed.");
         }
     </script>
 </body>
-
 </html>
